@@ -1,139 +1,92 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from './supabaseClient';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import { User } from '@/types';
-import { router } from 'expo-router';
+import { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  user: User | null;
   session: Session | null;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<boolean>;
-  signUp: (email: string, password: string, name?: string) => Promise<boolean>;
-  signInAnonymously: () => Promise<boolean>;
+  user: User | null;
+  profile: any;
+  initialized: boolean;
+  signIn: (email, password) => Promise<any>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    const fetchSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    console.log("AuthContext: Setting up auth state listener.");
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log(`AuthContext: onAuthStateChange event fired - ${_event}`);
       setSession(session);
-      if (session) {
-        await fetchUserProfile(session.user);
-      }
-      setLoading(false);
-    };
+      setUser(session?.user ?? null);
+      setProfile(null);
 
-    fetchSession();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        if (session) {
-          await fetchUserProfile(session.user);
-        } else {
-          setUser(null);
+      if (session?.user) {
+        console.log("AuthContext: Session found, fetching profile...");
+        try {
+          const { data: userProfile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (error) {
+            console.error("AuthContext: Error fetching profile.", error);
+          } else {
+            console.log("AuthContext: Profile fetched successfully.", userProfile);
+            setProfile(userProfile);
+          }
+        } catch (e) {
+            console.error("AuthContext: Exception while fetching profile.", e);
         }
-        setLoading(false);
+      } else {
+         console.log("AuthContext: No session, clearing profile.");
       }
-    );
+      
+      console.log("AuthContext: Initialization complete.");
+      setInitialized(true);
+    });
 
     return () => {
-      authListener?.subscription.unsubscribe();
+      console.log("AuthContext: Unsubscribing from auth state listener.");
+      subscription?.unsubscribe();
     };
   }, []);
 
-  const fetchUserProfile = async (supabaseUser: SupabaseUser | null) => {
-    if (!supabaseUser) {
-      setUser(null);
-      return;
+  const signIn = async (email, password) => {
+    console.log("AuthContext: Attempting to sign in...");
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if(error) {
+        console.error("AuthContext: sign in failed.", error.message);
+    } else {
+        console.log("AuthContext: sign in successful.");
     }
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', supabaseUser.id)
-        .single();
-
-      if (error) throw error;
-      
-      if (data) {
-        const appUser: User = {
-          id: data.id,
-          anonymousId: `user-${data.id.slice(0, 8)}`,
-          email: supabaseUser.email || '',
-          name: data.full_name,
-          role: data.role,
-          counselor_id: data.counselor_id || null, // Fetches the numeric counselor ID
-          isAnonymous: !!supabaseUser.is_anonymous,
-          preferences: data.preferences || {},
-          companyConnection: data.company_connection || null,
-        };
-        setUser(appUser);
-      }
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      setUser(null);
-    }
+    return { data, error };
   };
 
-  const signIn = async (email: string, password: string): Promise<boolean> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      console.error('Sign in error:', error.message);
-      return false;
-    }
-    return true;
-  };
-
-  const signUp = async (email: string, password: string, name?: string): Promise<boolean> => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name || 'Wellness User' } },
-    });
-    if (error) {
-      console.error('Sign up error:', error.message);
-      return false;
-    }
-    return true;
-  };
-
-  const signInAnonymously = async (): Promise<boolean> => {
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      console.error('Anonymous sign in error:', error.message);
-      return false;
-    }
-    return true;
-  };
-
-  const signOut = async (): Promise<void> => {
+  const signOut = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setTimeout(() => router.replace('/(auth)/welcome'), 0);
   };
+
+  const value = { session, user, profile, initialized, signIn, signOut };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signInAnonymously, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};

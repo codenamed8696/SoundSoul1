@@ -1,62 +1,52 @@
+import { Slot, useRouter, useSegments } from 'expo-router';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { SplashScreen } from 'expo-router';
-import { useFonts } from 'expo-font';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
-import {
-  Roboto_400Regular,
-  Roboto_500Medium,
-  Roboto_700Bold,
-} from '@expo-google-fonts/roboto';
-import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { AuthProvider } from '@/context/AuthContext';
 import { DataProvider } from '@/context/DataContext';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Prevent splash screen from auto-hiding
-SplashScreen.preventAutoHideAsync();
-
-export default function RootLayout() {
-  useFrameworkReady();
-
-  const [fontsLoaded, fontError] = useFonts({
-    'Inter-Regular': Inter_400Regular,
-    'Inter-Medium': Inter_500Medium,
-    'Inter-SemiBold': Inter_600SemiBold,
-    'Inter-Bold': Inter_700Bold,
-    'Roboto-Regular': Roboto_400Regular,
-    'Roboto-Medium': Roboto_500Medium,
-    'Roboto-Bold': Roboto_700Bold,
-  });
+const InitialLayout = () => {
+  const { session, initialized } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+    if (!initialized) return;
+
+    const inAppGroup = segments[0] === '(app)';
+
+    if (session && !inAppGroup) {
+      // User is signed in but not in the (app) group, redirect them inside.
+      router.replace('/(app)');
+    } else if (!session) {
+      // User is not signed in, redirect them to the auth flow.
+      router.replace('/(auth)/login');
     }
-  }, [fontsLoaded, fontError]);
+  }, [session, initialized, segments, router]);
 
-  if (!fontsLoaded && !fontError) {
-    return null;
-  }
+  // While the session is being checked, show a loading spinner.
+  // If initialized, Slot will render either the (app) or (auth) layout.
+  return initialized ? <Slot /> : <View style={styles.centered}><ActivityIndicator size="large" /></View>;
+};
 
+// The RootLayout now only sets up providers and renders the InitialLayout.
+// This prevents the providers from ever being re-mounted during a navigation change.
+export default function RootLayout() {
   return (
-    <AuthProvider>
-      <DataProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="(employer)" />
-          <Stack.Screen name="(counselor)" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
-      </DataProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <DataProvider>
+          <InitialLayout />
+        </DataProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

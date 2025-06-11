@@ -35,14 +35,14 @@ const difficultyColors = {
 
 export default function WellnessScreen() {
   const { user } = useAuth();
-  const { wellnessResources, fetchWellnessResources, getUserInsights, loading } = useData();
+  const { wellnessResources, getWellnessResources, getUserInsights, loading } = useData();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedResource, setSelectedResource] = useState<WellnessResource | null>(null);
   const [insights, setInsights] = useState<any>(null);
 
   useEffect(() => {
     // Fetch wellness resources on component mount
-    fetchWellnessResources();
+    getWellnessResources();
     
     // Fetch user insights
     if (user) {
@@ -77,7 +77,7 @@ export default function WellnessScreen() {
   const handleCategoryFilter = (category: string) => {
     setSelectedCategory(category);
     const filters = category === 'all' ? {} : { category };
-    fetchWellnessResources(filters);
+    getWellnessResources(filters);
   };
 
   const getResourceIcon = (type: string) => {

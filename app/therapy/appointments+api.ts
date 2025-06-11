@@ -1,352 +1,181 @@
-import { 
-  validateSession, 
-  createAppointment, 
-  findAppointmentById, 
-  updateAppointment, 
-  getAppointmentsByUserId, 
-  getAppointmentsByCounselorId,
-  getAllAppointments,
-  findCounselorById
-} from '@/utils/authStore';
+import { supabase } from '@/context/supabaseClient'; // Using the real Supabase client
 
+// Helper to get user from request header
+async function getUserFromRequest(request: Request) {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Error('Authorization token required');
+  }
+  const token = authHeader.substring(7);
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    throw new Error('Invalid or expired token');
+  }
+  return user;
+}
+
+/**
+ * GET: Fetches appointments based on the logged-in user's role.
+ */
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization token required' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    const user = await getUserFromRequest(request);
+
+    // Fetch the user's profile to get their role
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return new Response(JSON.stringify({ error: 'User profile not found.' }), { status: 404 });
     }
 
-    const token = authHeader.substring(7);
-    const user = validateSession(token);
-    
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    let query = supabase.from('appointments').select('*');
+
+    // Filter appointments based on user role
+    if (profile.role === 'user') {
+      query = query.eq('user_id', user.id);
+    } else if (profile.role === 'counselor') {
+      // This part assumes the counselor's profile ID is linked correctly.
+      // We would need to fetch the counselor-specific ID first.
+      // For now, this demonstrates the RLS will do the heavy lifting.
+      // This query will only return appointments the counselor is allowed to see by RLS.
+    } else if (profile.role !== 'admin') {
+      return new Response(JSON.stringify({ error: 'Invalid user role for this action.' }), { status: 403 });
     }
 
-    // Get query parameters
-    const url = new URL(request.url);
-    const appointmentId = url.searchParams.get('id');
+    const { data: appointments, error } = await query;
 
-    if (appointmentId) {
-      // Get specific appointment
-      const appointment = findAppointmentById(appointmentId);
-      if (!appointment) {
-        return new Response(
-          JSON.stringify({ error: 'Appointment not found' }),
-          {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
+    if (error) throw error;
 
-      // Check permissions
-      if (user.role === 'user' && appointment.userId !== user.id) {
-        return new Response(
-          JSON.stringify({ error: 'Access denied' }),
-          {
-            status: 403,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
+    return new Response(JSON.stringify({ appointments }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
 
-      if (user.role === 'counselor' && appointment.counselorId !== user.id) {
-        return new Response(
-          JSON.stringify({ error: 'Access denied' }),
-          {
-            status: 403,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          appointment,
-          success: true 
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    } else {
-      // Get appointments based on user role
-      let appointments = [];
-      
-      switch (user.role) {
-        case 'user':
-          appointments = getAppointmentsByUserId(user.id);
-          break;
-        case 'counselor':
-          appointments = getAppointmentsByCounselorId(user.id);
-          break;
-        case 'admin':
-          appointments = getAllAppointments();
-          break;
-        default:
-          return new Response(
-            JSON.stringify({ error: 'Invalid user role' }),
-            {
-              status: 403,
-              headers: { 'Content-Type': 'application/json' }
-            }
-          );
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          appointments,
-          total: appointments.length,
-          success: true 
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
   } catch (error) {
-    console.error('Get appointments error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 
+/**
+ * POST: Creates a new appointment.
+ */
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization token required' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const token = authHeader.substring(7);
-    const user = validateSession(token);
-    
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
+    const user = await getUserFromRequest(request);
     const body = await request.json();
-    const { counselorId, scheduledDate, duration, type, notes } = body;
 
-    // Validate required fields
-    if (!counselorId || !scheduledDate || !type) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: counselorId, scheduledDate, type' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+    const { counselor_id, appointment_time, status = 'scheduled' } = body;
+
+    if (!counselor_id || !appointment_time) {
+      return new Response(JSON.stringify({ error: 'Missing required fields: counselor_id, appointment_time' }), { status: 400 });
     }
 
-    // Validate counselor exists
-    const counselor = findCounselorById(counselorId);
-    if (!counselor) {
-      return new Response(
-        JSON.stringify({ error: 'Counselor not found' }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    const { data: newAppointment, error } = await supabase
+      .from('appointments')
+      .insert({
+        user_id: user.id,
+        counselor_id,
+        appointment_time,
+        status,
+      })
+      .select()
+      .single();
 
-    // Validate appointment type
-    if (!['video', 'audio', 'chat'].includes(type)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid appointment type' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    if (error) throw error;
 
-    // Create meeting link for video/audio sessions
-    const meetingLink = type !== 'chat' 
-      ? `https://meet.wellness.app/room/${Date.now()}` 
-      : undefined;
-
-    // Create appointment
-    const appointment = createAppointment({
-      userId: user.id,
-      counselorId,
-      userAnonymousId: user.anonymousId,
-      scheduledDate,
-      duration: duration || 60,
-      type,
-      status: 'pending',
-      notes,
-      meetingLink
+    return new Response(JSON.stringify({ appointment: newAppointment }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
     });
-    
-    return new Response(
-      JSON.stringify({ 
-        appointment,
-        success: true,
-        message: 'Appointment booked successfully' 
-      }),
-      {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+
   } catch (error) {
-    console.error('Create appointment error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 
+/**
+ * PUT: Updates an existing appointment (e.g., to cancel it).
+ */
 export async function PUT(request: Request) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization token required' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const token = authHeader.substring(7);
-    const user = validateSession(token);
-    
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const body = await request.json();
-    const { id, ...updates } = body;
+    await getUserFromRequest(request);
+    const { id, ...updates } = await request.json();
 
     if (!id) {
-      return new Response(
-        JSON.stringify({ error: 'Appointment ID is required' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+      return new Response(JSON.stringify({ error: 'Appointment ID is required' }), { status: 400 });
     }
 
-    // Find the appointment
-    const appointment = findAppointmentById(id);
-    if (!appointment) {
-      return new Response(
-        JSON.stringify({ error: 'Appointment not found' }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    const { data: updatedAppointment, error } = await supabase
+      .from('appointments')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
 
-    // Check permissions
-    const canUpdate = user.role === 'admin' || 
-                     (user.role === 'counselor' && appointment.counselorId === user.id) ||
-                     (user.role === 'user' && appointment.userId === user.id);
+    if (error) throw error;
 
-    if (!canUpdate) {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient permissions' }),
-        {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    return new Response(JSON.stringify({ appointment: updatedAppointment }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
 
-    // Validate status if being updated
-    if (updates.status && !['pending', 'confirmed', 'completed', 'cancelled'].includes(updates.status)) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid appointment status' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Update appointment
-    const updatedAppointment = updateAppointment(id, updates);
-    
-    if (!updatedAppointment) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to update appointment' }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        appointment: updatedAppointment,
-        success: true,
-        message: 'Appointment updated successfully' 
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
   } catch (error) {
-    console.error('Update appointment error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
+}
+
+
+/**
+ * PATCH: A specific action to mark an appointment as complete and use a B2B credit.
+ */
+export async function PATCH(request: Request) {
+    try {
+        const user = await getUserFromRequest(request);
+        const { appointmentId, organizationId } = await request.json();
+
+        if (!appointmentId || !organizationId) {
+            return new Response(JSON.stringify({ error: 'appointmentId and organizationId are required.' }), { status: 400 });
+        }
+
+        // Step 1: Update the appointment's status to 'completed'.
+        const { error: updateError } = await supabase
+            .from('appointments')
+            .update({ status: 'completed' })
+            .eq('id', appointmentId);
+
+        if (updateError) throw updateError;
+
+        // Step 2: Call the database function to use a credit.
+        const { error: rpcError } = await supabase.rpc('use_organization_credit', {
+            p_user_id: user.id,
+            p_organization_id: organizationId,
+        });
+
+        if (rpcError) throw rpcError;
+
+        return new Response(JSON.stringify({ success: true, message: 'Appointment completed and credit used.' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+
+    } catch (error) {
+        return new Response(JSON.stringify({ error: (error as Error).message }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
 }
