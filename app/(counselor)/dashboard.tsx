@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { 
   Calendar, 
@@ -14,24 +14,65 @@ import {
 import { Card } from '@/components/common/Card';
 import { useData } from '@/context/DataContext';
 import { useAuth } from '@/context/AuthContext';
+import { RecentActivity, Appointment } from '@/types';
+
+// Helper function to render the correct icon based on activity type
+const renderActivityIcon = (type: RecentActivity['type']) => {
+  switch (type) {
+    case 'message':
+      return <MessageCircle size={16} color="#6366f1" />;
+    case 'session':
+      return <Calendar size={16} color="#10b981" />;
+    case 'rating':
+      return <Star size={16} color="#f59e0b" />;
+    default:
+      return null;
+  }
+};
+
+// Helper function to format the timestamp into a readable string
+const formatTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const past = new Date(timestamp);
+    const seconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " years ago";
+    
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " months ago";
+    
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " days ago";
+    
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " hours ago";
+    
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " minutes ago";
+
+    return "Just now";
+};
+
 
 export default function CounselorDashboardScreen() {
-  const { user } = useAuth();
-  const { appointments } = useData();
+  const { profile } = useAuth();
+  const { appointments, counselorStats, recentActivity, loading } = useData();
 
-  const counselorAppointments = appointments.filter(apt => apt.counselorId === user?.id);
-  const todayAppointments = counselorAppointments.filter(apt => {
+  // The loading check now looks at all the specific data needed for this screen.
+  if (loading.counselorStats || loading.appointments || loading.recentActivity) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#6366f1" />
+      </View>
+    );
+  }
+
+  // Filter appointments for today
+  const todayAppointments = (Array.isArray(appointments) ? appointments : []).filter(apt => {
     const today = new Date().toDateString();
-    return new Date(apt.scheduledDate).toDateString() === today;
+    return new Date(apt.appointment_time).toDateString() === today;
   });
-
-  const upcomingAppointments = counselorAppointments.filter(apt => 
-    new Date(apt.scheduledDate) > new Date() && apt.status !== 'cancelled'
-  );
-
-  const completedSessions = counselorAppointments.filter(apt => apt.status === 'completed').length;
-  const averageRating = 4.8; // Demo data
-  const totalClients = counselorAppointments.length; // Simplified for demo
 
   return (
     <SafeAreaView style={styles.container}>
@@ -41,7 +82,7 @@ export default function CounselorDashboardScreen() {
           <View>
             <Text style={styles.title}>Counselor Dashboard</Text>
             <Text style={styles.subtitle}>
-              Welcome back, {user?.name || 'Dr. Sarah Chen'}
+              Welcome back, {profile?.full_name || 'Dr. Sarah Chen'}
             </Text>
           </View>
           <View style={styles.privacyBadge}>
@@ -65,7 +106,7 @@ export default function CounselorDashboardScreen() {
             <Card style={styles.statCard}>
               <View style={styles.statHeader}>
                 <Clock size={24} color="#10b981" />
-                <Text style={styles.statValue}>{upcomingAppointments.length}</Text>
+                <Text style={styles.statValue}>{counselorStats?.upcomingAppointments ?? '...'}</Text>
               </View>
               <Text style={styles.statLabel}>Upcoming</Text>
             </Card>
@@ -73,7 +114,7 @@ export default function CounselorDashboardScreen() {
             <Card style={styles.statCard}>
               <View style={styles.statHeader}>
                 <MessageCircle size={24} color="#f59e0b" />
-                <Text style={styles.statValue}>3</Text>
+                <Text style={styles.statValue}>{counselorStats?.unreadMessages ?? '...'}</Text>
               </View>
               <Text style={styles.statLabel}>New Messages</Text>
             </Card>
@@ -89,7 +130,7 @@ export default function CounselorDashboardScreen() {
                 <Users size={20} color="#6366f1" />
                 <Text style={styles.metricTitle}>Total Clients</Text>
               </View>
-              <Text style={styles.metricValue}>{totalClients}</Text>
+              <Text style={styles.metricValue}>{counselorStats?.totalClients ?? '...'}</Text>
               <Text style={styles.metricTrend}>+3 this month</Text>
             </Card>
 
@@ -98,7 +139,7 @@ export default function CounselorDashboardScreen() {
                 <TrendingUp size={20} color="#10b981" />
                 <Text style={styles.metricTitle}>Sessions Completed</Text>
               </View>
-              <Text style={styles.metricValue}>{completedSessions}</Text>
+              <Text style={styles.metricValue}>{counselorStats?.sessionsCompleted ?? '...'}</Text>
               <Text style={styles.metricTrend}>+12 this month</Text>
             </Card>
 
@@ -107,7 +148,7 @@ export default function CounselorDashboardScreen() {
                 <Star size={20} color="#f59e0b" />
                 <Text style={styles.metricTitle}>Average Rating</Text>
               </View>
-              <Text style={styles.metricValue}>{averageRating}</Text>
+              <Text style={styles.metricValue}>{counselorStats?.averageRating ?? '...'}</Text>
               <Text style={styles.metricTrend}>Excellent</Text>
             </Card>
           </View>
@@ -124,7 +165,7 @@ export default function CounselorDashboardScreen() {
                     <View style={styles.appointmentTime}>
                       <Clock size={16} color="#6b7280" />
                       <Text style={styles.timeText}>
-                        {new Date(appointment.scheduledDate).toLocaleTimeString([], {
+                        {new Date(appointment.appointment_time).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit'
                         })}
@@ -141,7 +182,7 @@ export default function CounselorDashboardScreen() {
                     </View>
                   </View>
                   <Text style={styles.appointmentClient}>
-                    Anonymous Client #{appointment.userAnonymousId.slice(-6)}
+                    Anonymous Client #{appointment.user_id.slice(-6)}
                   </Text>
                   <Text style={styles.appointmentDuration}>
                     {appointment.duration} minutes • {appointment.status}
@@ -160,39 +201,21 @@ export default function CounselorDashboardScreen() {
           )}
         </View>
 
-        {/* Recent Activity */}
+        {/* --- RECENT ACTIVITY (NOW FUNCTIONAL) --- */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           <Card style={styles.activityCard}>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <MessageCircle size={16} color="#6366f1" />
+            {(Array.isArray(recentActivity) ? recentActivity : []).map((activity) => (
+              <View key={activity.id} style={styles.activityItem}>
+                <View style={styles.activityIcon}>
+                  {renderActivityIcon(activity.type)}
+                </View>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>{activity.title}</Text>
+                  <Text style={styles.activityTime}>{formatTimeAgo(activity.timestamp)}</Text>
+                </View>
               </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>New message received</Text>
-                <Text style={styles.activityTime}>2 hours ago</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <Calendar size={16} color="#10b981" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Session completed</Text>
-                <Text style={styles.activityTime}>4 hours ago</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <Star size={16} color="#f59e0b" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Received 5-star rating</Text>
-                <Text style={styles.activityTime}>Yesterday</Text>
-              </View>
-            </View>
+            ))}
           </Card>
         </View>
 
@@ -221,6 +244,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',

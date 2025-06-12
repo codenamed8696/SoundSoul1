@@ -6,31 +6,36 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const InitialLayout = () => {
-  const { session, initialized } = useAuth();
+  const { session, profile, initialized } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     if (!initialized) return;
 
-    const inAppGroup = segments[0] === '(app)';
+    const inAuthGroup = segments[0] === '(auth)';
 
-    if (session && !inAppGroup) {
-      // User is signed in but not in the (app) group, redirect them inside.
-      router.replace('/(app)');
-    } else if (!session) {
-      // User is not signed in, redirect them to the auth flow.
+    if (session && profile) {
+      // User is signed in and has a profile, redirect them to the correct portal
+      if (profile.role === 'employer' && segments[0] !== '(employer)') {
+        router.replace('/(employer)/dashboard');
+      } else if (profile.role === 'counselor' && segments[0] !== '(counselor)') {
+        router.replace('/(counselor)/dashboard');
+      } else if (profile.role === 'user' && segments[0] !== '(tabs)') {
+        router.replace('/(tabs)');
+      }
+    } else if (!session && !inAuthGroup) {
+      // User is not signed in and not in the auth group, send them to login.
       router.replace('/(auth)/login');
     }
-  }, [session, initialized, segments, router]);
+  }, [session, profile, initialized, segments, router]);
 
-  // While the session is being checked, show a loading spinner.
-  // If initialized, Slot will render either the (app) or (auth) layout.
+  // Show a loading spinner while the auth state is initializing.
+  // Once initialized, Slot will render the correct navigator.
   return initialized ? <Slot /> : <View style={styles.centered}><ActivityIndicator size="large" /></View>;
 };
 
-// The RootLayout now only sets up providers and renders the InitialLayout.
-// This prevents the providers from ever being re-mounted during a navigation change.
+// The RootLayout sets up all providers and uses InitialLayout as the gatekeeper.
 export default function RootLayout() {
   return (
     <SafeAreaProvider>

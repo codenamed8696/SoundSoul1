@@ -1,179 +1,41 @@
-export interface User {
+export interface UserProfile {
   id: string;
-  email: string;
-  anonymousId: string;
-  isAnonymous: boolean;
-  role: 'user' | 'employer' | 'counselor' | 'admin';
-  name?: string;
-  preferences?: UserPreferences;
-  companyConnection?: {
-    token: string;
-    verified: boolean;
-    benefits: string[];
-  };
-  createdAt: string;
-  updatedAt: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  role: 'user' | 'counselor' | 'employer';
+  organization_id: number | null;
+  counselor_id: number | null;
 }
 
-export interface UserPreferences {
-  notifications?: {
-    email?: boolean;
-    push?: boolean;
-    moodReminders?: boolean;
-    appointmentReminders?: boolean;
-  };
-  privacy?: {
-    shareAnonymousData?: boolean;
-    allowAnalytics?: boolean;
-  };
-  wellness?: {
-    dailyMoodTracking?: boolean;
-    weeklyReports?: boolean;
-    preferredSessionType?: 'video' | 'audio' | 'chat';
-  };
-  theme?: 'light' | 'dark' | 'system';
-  language?: string;
-}
+export interface Organization { /* ... */ }
+export interface Appointment { /* ... */ }
+export interface GeneratedReport { /* ... */ }
+export interface CompanyAnalytics { /* ... */ }
+export interface UserInsights { /* ... */ }
+export interface CounselorDashboardStats { /* ... */ }
+export interface RecentActivity { /* ... */ }
+export interface ClientDetails { /* ... */ }
 
-export interface MoodEntry {
-  id: string;
-  userId: string;
-  mood: number; // 1-5 scale
-  notes?: string;
-  date: string;
-  createdAt: string;
-}
-
-export interface WellnessResource {
-  id: string;
-  title: string;
-  description: string;
-  type: 'meditation' | 'breathing' | 'journal' | 'video' | 'article' | 'exercise';
-  duration?: number; // in minutes
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
-  category: string;
-  content?: {
-    url?: string;
-    instructions?: string[];
-    steps?: string[];
-  };
-  tags: string[];
-  imageUrl?: string;
-  isPopular?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Counselor {
-  id: string;
-  name: string;
-  specialties: string[];
-  bio: string;
-  rating: number;
-  experience: number;
-  pricePerSession: number;
-  availability: {
-    [key: string]: string[]; // day: time slots
-  };
-  image?: string;
-  credentials: string[];
-}
-
-export interface Appointment {
-  id: string;
-  userId: string;
-  counselorId: string;
-  userAnonymousId: string;
-  scheduledDate: string;
-  duration: number;
-  type: 'video' | 'audio' | 'chat';
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
-  notes?: string;
-  meetingLink?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// --- NEWLY ADDED ---
+export type MessageSenderType = 'client' | 'counselor' | 'system';
 
 export interface Message {
   id: string;
-  conversationId: string;
-  senderId: string;
-  senderType: 'user' | 'counselor' | 'ai';
+  conversation_id: string;
+  sender_id: string; // Can be client's user_id or counselor's user_id
+  sender_type: MessageSenderType;
   content: string;
-  type: 'text' | 'image' | 'file';
   timestamp: string;
-  isRead: boolean;
-  isEncrypted: boolean;
+  risk_level?: 'low' | 'medium' | 'high';
 }
 
 export interface Conversation {
   id: string;
-  userId: string;
-  counselorId?: string;
-  type: 'ai' | 'counselor';
-  lastMessage?: Message;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AIChat {
-  id: string;
-  userId: string;
-  messages: {
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: string;
-    riskLevel?: 'low' | 'medium' | 'high' | 'crisis';
-  }[];
-  context: {
-    mood: number;
-    recentTopics: string[];
-    riskFactors: string[];
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AnonymousUsageRecord {
-  id: string;
-  companyTokenId: string;
-  serviceType: string;
-  sessionDate: string;
-  creditsUsed: number;
-  value: number;
-  metadata?: Record<string, any>;
-}
-
-export interface CompanyAnalytics {
-  companyToken: string;
-  totalUsers: number;
-  activeSessions: number;
-  moodTrends: {
-    average: number;
-    trend: 'up' | 'down' | 'stable';
-    data: { date: string; value: number }[];
-  };
-  utilization: {
-    aiChat: number;
-    therapy: number;
-    resources: number;
-  };
-  demographics: {
-    ageGroups: { range: string; count: number }[];
-    riskLevels: { level: string; percentage: number }[];
-  };
-}
-
-export interface WellnessInsights {
-  userId: string;
-  moodAverage: number;
-  moodTrend: 'improving' | 'declining' | 'stable';
-  streakDays: number;
-  totalSessions: number;
-  riskLevel: 'low' | 'medium' | 'high';
-  recommendations: string[];
-  nextAppointment?: {
-    date: string;
-    counselor: string;
-  };
+  client_id: string; // The anonymous client ID
+  counselor_id: string;
+  last_message: string;
+  timestamp: string;
+  unread: boolean;
+  risk_level: 'low' | 'medium' | 'high';
+  priority: 'normal' | 'high' | 'urgent';
 }

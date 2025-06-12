@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { useData } from '@/context/DataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,11 +6,10 @@ import { Users, BarChart3, HeartPulse, MessageSquare } from 'lucide-react-native
 import { Card } from '@/components/common/Card';
 
 const EmployerDashboardScreen = () => {
-  // Use the new simplified loading flag
   const { companyAnalytics, loading } = useData();
 
-  // The loading check is now simpler
-  if (loading) {
+  // The loading check now looks at the correct flag.
+  if (loading.analytics) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#6366f1" />
@@ -18,7 +17,6 @@ const EmployerDashboardScreen = () => {
     );
   }
 
-  // The check for data availability remains the same
   if (!companyAnalytics) {
     return (
       <View style={styles.centered}>
