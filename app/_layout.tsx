@@ -1,57 +1,40 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { AuthProvider } from '../context/AuthContext';
+import { DataProvider } from '../context/DataContext'; // Import the DataProvider
+import { Slot } from 'expo-router';
 import { useEffect } from 'react';
-import { DataProvider } from '@/context/DataContext';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 
-const InitialLayout = () => {
-  const { session, profile, initialized } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+// Prevent the splash screen from auto-hiding.
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    'Inter-Regular': Inter_400Regular,
+    'Inter-Medium': Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+    'Inter-Bold': Inter_700Bold,
+  });
 
   useEffect(() => {
-    if (!initialized) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (session && profile) {
-      // User is signed in and has a profile, redirect them to the correct portal
-      if (profile.role === 'employer' && segments[0] !== '(employer)') {
-        router.replace('/(employer)/dashboard');
-      } else if (profile.role === 'counselor' && segments[0] !== '(counselor)') {
-        router.replace('/(counselor)/dashboard');
-      } else if (profile.role === 'user' && segments[0] !== '(tabs)') {
-        router.replace('/(tabs)');
-      }
-    } else if (!session && !inAuthGroup) {
-      // User is not signed in and not in the auth group, send them to login.
-      router.replace('/(auth)/login');
+    // Hide the splash screen once fonts are loaded.
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
     }
-  }, [session, profile, initialized, segments, router]);
+  }, [fontsLoaded]);
 
-  // Show a loading spinner while the auth state is initializing.
-  // Once initialized, Slot will render the correct navigator.
-  return initialized ? <Slot /> : <View style={styles.centered}><ActivityIndicator size="large" /></View>;
-};
+  // Don't render anything until the fonts are loaded.
+  if (!fontsLoaded) {
+    return null;
+  }
 
-// The RootLayout sets up all providers and uses InitialLayout as the gatekeeper.
-export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <DataProvider>
-          <InitialLayout />
-        </DataProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    // THE FIX: Wrap the entire app in BOTH providers.
+    // AuthProvider must be inside so DataProvider can access the user's session.
+    <AuthProvider>
+      <DataProvider>
+        <Slot />
+      </DataProvider>
+    </AuthProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

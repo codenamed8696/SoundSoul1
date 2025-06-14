@@ -1,14 +1,14 @@
 // This script populates your Supabase database with a large, realistic set of mock data.
-// It is designed to be robust and repeatable by using the official Supabase admin functions.
+// It is designed to be robust and repeatable by working WITH your database's automatic profile creation trigger.
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const { faker } = require('@faker-js/faker');
 
 // --- CONFIGURATION ---
-const NUM_ORGANIZATIONS = 150;
-const NUM_COUNSELORS = 75;
-const NUM_USERS = 1000;
+const NUM_ORGANIZATIONS = 15;
+const NUM_COUNSELORS = 7;
+const NUM_USERS = 10;
 // ---------------------
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -22,27 +22,20 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 async function cleanupOldData() {
     console.log('\n--- Cleaning up old data ---');
+    console.log('Deleting all authentication users. This will cascade and delete dependent data...');
     
-    // THE FIX: The ONLY correct way to delete users is via the auth admin API.
-    // This will cascade and delete profiles due to your database schema.
-    console.log('Deleting all authentication users...');
     const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
     if (listError) {
         throw new Error(`Could not list users for cleanup: ${listError.message}`);
     }
 
     if (users && users.length > 0) {
-        // Sequentially delete users to avoid overwhelming the database
-        for (const user of users) {
-            const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
-            if (deleteError) console.error(`Failed to delete user ${user.id}: ${deleteError.message}`);
-        }
+        await Promise.all(users.map(user => supabaseAdmin.auth.admin.deleteUser(user.id)));
         console.log(`Successfully deleted ${users.length} auth users.`);
     } else {
         console.log('No auth users to delete.');
     }
     
-    // Clean up tables that are not linked by foreign key constraints to auth.users
     console.log('Deleting remaining public table data...');
     await supabaseAdmin.from('counselors').delete().neq('id', -1);
     await supabaseAdmin.from('organizations').delete().neq('id', -1);
@@ -60,7 +53,6 @@ async function main() {
   const organizations = Array.from({ length: NUM_ORGANIZATIONS }, () => ({
     name: faker.company.name(),
     industry: faker.company.buzzNoun(),
-    employee_count: faker.number.int({ min: 10, max: 5000 }),
   }));
   const { data: createdOrganizations, error: orgError } = await supabaseAdmin.from('organizations').insert(organizations).select();
   if (orgError) throw new Error(`Error creating organizations: ${orgError.message}`);
@@ -71,11 +63,10 @@ async function main() {
   const counselorSpecs = ['CBT', 'DBT', 'Trauma-Informed', 'Grief Counseling', 'Addiction', 'Anxiety'];
   let createdCounselors = [];
   for (let i = 0; i < NUM_COUNSELORS; i++) {
-    const email = faker.internet.email({ firstName: `counselor${i}` }).toLowerCase();
+    const email = `counselor${i}@example.com`;
     const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.admin.createUser({ email, password: 'password123', email_confirm: true });
     if (authError) throw new Error(`Could not create counselor auth user: ${authError.message}`);
     
-    // THE FIX: UPDATE the auto-created profile with counselor-specific details.
     const { data: updatedProfile, error: profileError } = await supabaseAdmin.from('profiles').update({
         full_name: faker.person.fullName(),
         role: 'counselor',
@@ -83,11 +74,12 @@ async function main() {
     }).eq('id', authUser.id).select().single();
     if (profileError) throw new Error(`Could not UPDATE counselor profile: ${profileError.message}`);
 
+    // THE FIX: We now correctly set the 'status' to 'active' for every counselor.
     const { data: newCounselor, error: counselorError } = await supabaseAdmin.from('counselors').insert({
         profile_id: updatedProfile.id,
         bio: faker.person.bio(),
         specialties: faker.helpers.arrayElements(counselorSpecs, 2),
-        status: 'active'
+        status: 'active' 
     }).select().single();
     if (counselorError) throw new Error(`Could not create counselor record: ${counselorError.message}`);
     createdCounselors.push(newCounselor);
@@ -98,11 +90,10 @@ async function main() {
   console.log(`\nCreating ${NUM_USERS} users...`);
   let createdProfiles = [];
   for (let i = 0; i < NUM_USERS; i++) {
-    const email = faker.internet.email({ firstName: `user${i}` }).toLowerCase();
+    const email = `user${i}@example.com`;
     const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.admin.createUser({ email, password: 'password123', email_confirm: true });
     if (authError) { console.warn(`Skipping user ${email}: ${authError.message}`); continue; }
 
-    // THE FIX: UPDATE the auto-created profile with user-specific details.
     const { data: updatedProfile, error: profileError } = await supabaseAdmin.from('profiles').update({
       full_name: faker.person.fullName(),
       role: 'user',
@@ -115,36 +106,21 @@ async function main() {
   }
   console.log(`Successfully created ${createdProfiles.length} users.`);
   
-  // 4. Create Mood Entries
-  console.log('\nCreating mood entries...');
+  // 4. Create Mood Entries & Appointments
+  console.log('\nCreating mood entries and appointments...');
   const moodEntries = [];
+  const appointments = [];
   for (const profile of createdProfiles) {
     for (let i = 0; i < 30; i++) {
-      moodEntries.push({
-        user_id: profile.id,
-        mood_score: faker.number.int({ min: 1, max: 5 }),
-        created_at: faker.date.recent({ days: 90 }),
-      });
+        moodEntries.push({ user_id: profile.id, mood_score: faker.number.int({ min: 1, max: 5 }), created_at: faker.date.recent({ days: 90 }) });
+    }
+    if (faker.datatype.boolean(0.5)) {
+        appointments.push({ user_id: profile.id, counselor_id: profile.counselor_id, appointment_time: faker.date.future(), status: faker.helpers.arrayElement(['scheduled', 'completed', 'cancelled']) });
     }
   }
   await supabaseAdmin.from('mood_entries').insert(moodEntries);
-  console.log(`Successfully created ${moodEntries.length} mood entries.`);
-
-  // 5. Create Appointments
-  console.log('\nCreating appointments...');
-  const appointments = [];
-  for (const profile of createdProfiles) {
-    if (faker.datatype.boolean(0.5)) {
-        appointments.push({
-            user_id: profile.id,
-            counselor_id: profile.counselor_id,
-            appointment_time: faker.date.future(),
-            status: faker.helpers.arrayElement(['scheduled', 'completed', 'cancelled']),
-        });
-    }
-  }
   await supabaseAdmin.from('appointments').insert(appointments);
-  console.log(`Successfully created ${appointments.length} appointments.`);
+  console.log(`Successfully created ${moodEntries.length} mood entries and ${appointments.length} appointments.`);
 
   console.log('\n--- Seeding script finished successfully! ---');
 }

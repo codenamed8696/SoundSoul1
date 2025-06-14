@@ -158,15 +158,17 @@ export default function AppointmentsScreen() {
             <Text style={styles.sectionTitle}>Choose Your Therapist</Text>
             <Text style={styles.sectionSubtitle}>All therapists are licensed professionals specializing in various areas of mental health</Text>
             {loading.counselors ? <ActivityIndicator color="#6366f1" /> : 
-              counselors.map((counselor) => (
-                <CounselorCard
-                  key={counselor.id}
-                  counselor={counselor}
-                  onBook={() => handleBookAppointment(counselor)}
-                  onViewProfile={() => handleViewProfile(counselor)}
-                  isBooking={bookingState[counselor.id]} // Pass booking state to the card
-                />
-              ))
+              counselors
+                .filter(counselor => counselor.status === 'available') // Filters for available counselors
+                .map((counselor) => (
+                  <CounselorCard
+                    key={counselor.id}
+                    counselor={counselor}
+                    onBook={() => handleBookAppointment(counselor)}
+                    onViewProfile={() => handleViewProfile(counselor)}
+                    isBooking={bookingState[counselor.id]} // Pass booking state to the card
+                  />
+                ))
             }
           </View>
         )}
