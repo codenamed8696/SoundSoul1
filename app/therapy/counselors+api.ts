@@ -1,274 +1,40 @@
-import { 
-  validateSession, 
-  getAllCounselors, 
-  findCounselorById, 
-  createCounselor, 
-  updateCounselor 
-} from '@/utils/authStore';
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../../supabase/functions/_shared/cors.ts';
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!);
 
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('Authorization');
+    //
+    // DEBUGGING STEP: We are simplifying the query completely.
+    // This query will fetch ALL counselors with a status of 'active'.
+    // It does not join with any other tables.
+    //
+    const { data: counselors, error } = await supabaseAdmin
+      .from('counselors')
+      .select('*') // Select all columns from the counselors table
+      .eq('status', 'active'); // Filter by status
+
+    if (error) {
+      throw error;
+    }
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization token required' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
+    // We will log the result on the server to see what the database returns.
+    console.log('Fetched counselors (raw):', counselors);
 
-    const token = authHeader.substring(7);
-    const user = validateSession(token);
-    
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Get query parameters
-    const url = new URL(request.url);
-    const counselorId = url.searchParams.get('id');
-
-    if (counselorId) {
-      // Get specific counselor
-      const counselor = findCounselorById(counselorId);
-      if (!counselor) {
-        return new Response(
-          JSON.stringify({ error: 'Counselor not found' }),
-          {
-            status: 404,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-      
-      return new Response(
-        JSON.stringify({ 
-          counselor,
-          success: true 
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    } else {
-      // Get all counselors
-      const counselors = getAllCounselors();
-      
-      return new Response(
-        JSON.stringify({ 
-          counselors,
-          total: counselors.length,
-          success: true 
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-  } catch (error) {
-    console.error('Get counselors error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const authHeader = request.headers.get('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization token required' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const token = authHeader.substring(7);
-    const user = validateSession(token);
-    
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Only admins can create counselors
-    if (user.role !== 'admin') {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient permissions' }),
-        {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const body = await request.json();
-    const { 
-      name, 
-      specialties, 
-      bio, 
-      rating, 
-      experience, 
-      pricePerSession, 
-      availability, 
-      image, 
-      credentials 
-    } = body;
-
-    // Validate required fields
-    if (!name || !specialties || !bio || !experience || !pricePerSession || !credentials) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Create counselor
-    const counselor = createCounselor({
-      name,
-      specialties,
-      bio,
-      rating: rating || 0,
-      experience,
-      pricePerSession,
-      availability: availability || {},
-      image,
-      credentials
+    // Note: The frontend might look strange because we are not fetching the profile names,
+    // but this is a temporary step to see if we can get any data at all.
+    return new Response(JSON.stringify({ counselors }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
     });
-    
-    return new Response(
-      JSON.stringify({ 
-        counselor,
-        success: true,
-        message: 'Counselor created successfully' 
-      }),
-      {
-        status: 201,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
   } catch (error) {
-    console.error('Create counselor error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
-
-export async function PUT(request: Request) {
-  try {
-    const authHeader = request.headers.get('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({ error: 'Authorization token required' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const token = authHeader.substring(7);
-    const user = validateSession(token);
-    
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid or expired token' }),
-        {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Only admins can update counselors
-    if (user.role !== 'admin') {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient permissions' }),
-        {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    const body = await request.json();
-    const { id, ...updates } = body;
-
-    if (!id) {
-      return new Response(
-        JSON.stringify({ error: 'Counselor ID is required' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Update counselor
-    const updatedCounselor = updateCounselor(id, updates);
-    
-    if (!updatedCounselor) {
-      return new Response(
-        JSON.stringify({ error: 'Counselor not found' }),
-        {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        counselor: updatedCounselor,
-        success: true,
-        message: 'Counselor updated successfully' 
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  } catch (error) {
-    console.error('Update counselor error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    console.error('Error fetching counselors (raw):', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    });
   }
 }

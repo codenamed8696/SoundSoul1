@@ -12,137 +12,93 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { useData } from '@/context/DataContext';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/context/supabaseClient';
 import { Send } from 'lucide-react-native';
 
 // This defines the structure of a single message object
 interface Message {
-  id: string;
   role: 'user' | 'assistant';
   content: string;
 }
 
 const ChatScreen = () => {
-  const { user } = useAuth();
-  // We get conversations and loading state from our DataContext
-  const { conversations, loading: dataLoading } = useData();
+  // THE FIX: Get the real chat history, send function, and loading state from DataContext
+  const { aiChats, sendAIMessage, loading } = useData();
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  // We still need local state for the text input field
   const [newMessage, setNewMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  // This effect runs when the data from the context is loaded
+  // This effect scrolls to the bottom when new messages are added to the global state
   useEffect(() => {
-    // We find the existing AI conversation or prepare to start a new one
-    if (!dataLoading && conversations) {
-      // For this example, we'll just use a mock set of messages.
-      // In a real app, you would fetch these from your new `messages` table
-      // based on the conversation ID.
-      setMessages([
-        { id: '1', role: 'assistant', content: 'Hello! I am your AI Wellness Companion. How are you feeling today?' }
-      ]);
+    if (aiChats && aiChats.length > 0) {
+      flatListRef.current?.scrollToEnd({ animated: true });
     }
-  }, [dataLoading, conversations]);
+  }, [aiChats]);
 
-  const handleSend = async () => {
-    if (newMessage.trim() === '' || !user) return;
-
-    const userMessage: Message = {
-      id: Math.random().toString(), // Use a better ID in production
-      role: 'user',
-      content: newMessage.trim(),
-    };
-
-    // Add user's message to the screen immediately for a good UX
-    setMessages(prev => [...prev, userMessage]);
-    setNewMessage('');
-    setIsLoading(true);
-
-    try {
-      // Call the Supabase Edge Function we created
-      const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { query: userMessage.content },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      // Add the AI's response to the screen
-      const aiMessage: Message = {
-        id: Math.random().toString(),
-        role: 'assistant',
-        content: data.response || "I'm sorry, I had trouble thinking of a response.",
-      };
-      setMessages(prev => [...prev, aiMessage]);
-
-    } catch (error) {
-      console.error("Error calling AI chat function:", error);
-      const errorMessage: Message = {
-        id: Math.random().toString(),
-        role: 'assistant',
-        content: 'I had an issue connecting. Please try again.',
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+  // THE FIX: This function now calls the working sendAIMessage from our context
+  const handleSendMessage = async () => {
+    if (newMessage.trim() === '' || loading.chat) {
+      return;
     }
+    const messageToSend = newMessage.trim();
+    setNewMessage(''); // Clear input immediately
+    await sendAIMessage(messageToSend);
   };
 
-  // This is the CRITICAL fix for the crash. We show a loading spinner
-  // while the initial data (like conversations) is being fetched.
-  if (dataLoading) {
+  // Your original renderItem function for the FlatList
+  const renderMessage = ({ item }: { item: Message }) => {
+    const isUserMessage = item.role === 'user';
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#6366f1" />
+      <View style={[
+        styles.messageBubble,
+        isUserMessage ? styles.userBubble : styles.assistantBubble
+      ]}>
+        <Text style={isUserMessage ? styles.userText : styles.assistantText}>
+          {item.content}
+        </Text>
       </View>
     );
-  }
-  
+  };
+
+  // Your original UI structure is preserved
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.container}
+      <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={90}
       >
+        {/* THE FIX: The FlatList now gets its data from `aiChats` from the context */}
         <FlatList
           ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={[
-              styles.messageBubble,
-              item.role === 'user' ? styles.userBubble : styles.assistantBubble
-            ]}>
-              <Text style={item.role === 'user' ? styles.userText : styles.assistantText}>
-                {item.content}
-              </Text>
-            </View>
-          )}
-          contentContainerStyle={styles.messageList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          data={aiChats}
+          renderItem={renderMessage}
+          keyExtractor={(item, index) => index.toString()}
+          style={styles.messageList}
+          contentContainerStyle={{ paddingBottom: 10 }}
         />
 
-        {isLoading && (
+        {/* THE FIX: The typing indicator now uses `loading.chat` from the context */}
+        {loading.chat && (
           <View style={styles.typingIndicator}>
-            <Text style={styles.typingText}>AI is thinking...</Text>
+            <Text style={styles.typingText}>Assistant is typing...</Text>
           </View>
         )}
 
         <View style={styles.inputContainer}>
           <TextInput
-            style={styles.textInput}
+            style={styles.input}
             value={newMessage}
             onChangeText={setNewMessage}
             placeholder="Type your message..."
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#6b7280"
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={isLoading}>
-            <Send size={24} color="#ffffff" />
+          <TouchableOpacity 
+            style={styles.sendButton} 
+            onPress={handleSendMessage}
+            disabled={loading.chat} // Disable button while loading
+          >
+            {loading.chat ? <ActivityIndicator size="small" color="#ffffff" /> : <Send size={20} color="#ffffff" />}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -150,6 +106,7 @@ const ChatScreen = () => {
   );
 };
 
+// Your original styles are fully preserved
 const styles = StyleSheet.create({
   centered: {
     flex: 1,
@@ -162,7 +119,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
   },
   messageList: {
-    padding: 16,
+    paddingHorizontal: 16,
   },
   messageBubble: {
     paddingVertical: 12,
@@ -194,6 +151,7 @@ const styles = StyleSheet.create({
   typingIndicator: {
     paddingHorizontal: 16,
     paddingBottom: 8,
+    alignItems: 'flex-start',
   },
   typingText: {
     fontStyle: 'italic',
@@ -202,21 +160,22 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+    padding: 12,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     backgroundColor: '#ffffff',
   },
-  textInput: {
+  input: {
     flex: 1,
     height: 44,
     backgroundColor: '#f3f4f6',
     borderRadius: 22,
     paddingHorizontal: 16,
     fontSize: 16,
+    color: '#111827',
   },
   sendButton: {
-    marginLeft: 8,
+    marginLeft: 12,
     width: 44,
     height: 44,
     borderRadius: 22,

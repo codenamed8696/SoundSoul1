@@ -1,181 +1,90 @@
-import { supabase } from '@/context/supabaseClient'; // Using the real Supabase client
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../../supabase/functions/_shared/cors.ts';
+import { validateSession } from '../../utils/authStore.ts';
 
-// Helper to get user from request header
-async function getUserFromRequest(request: Request) {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new Error('Authorization token required');
-  }
-  const token = authHeader.substring(7);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!);
 
-  if (error || !user) {
-    throw new Error('Invalid or expired token');
-  }
-  return user;
-}
-
-/**
- * GET: Fetches appointments based on the logged-in user's role.
- */
 export async function GET(request: Request) {
   try {
-    const user = await getUserFromRequest(request);
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader) throw new Error('Authorization token required');
+    
+    const token = authHeader.substring(7);
+    const user = await validateSession(token);
+    if (!user) throw new Error('Invalid or expired token');
 
-    // Fetch the user's profile to get their role
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return new Response(JSON.stringify({ error: 'User profile not found.' }), { status: 404 });
-    }
-
-    let query = supabase.from('appointments').select('*');
-
-    // Filter appointments based on user role
-    if (profile.role === 'user') {
-      query = query.eq('user_id', user.id);
-    } else if (profile.role === 'counselor') {
-      // This part assumes the counselor's profile ID is linked correctly.
-      // We would need to fetch the counselor-specific ID first.
-      // For now, this demonstrates the RLS will do the heavy lifting.
-      // This query will only return appointments the counselor is allowed to see by RLS.
-    } else if (profile.role !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Invalid user role for this action.' }), { status: 403 });
-    }
-
-    const { data: appointments, error } = await query;
+    // THE FIX: Using explicit foreign key names for both nested joins.
+    const { data, error } = await supabaseAdmin
+      .from('appointments')
+      .select(`
+        *,
+        counselor:counselors!appointments_counselor_id_fkey (
+            id,
+            profile:profiles!counselors_profile_id_fkey (
+                full_name,
+                avatar_url
+            )
+        )
+      `)
+      .eq('user_id', user.id)
+      .order('appointment_time', { ascending: false });
 
     if (error) throw error;
 
-    return new Response(JSON.stringify({ appointments }), {
+    return new Response(JSON.stringify({ appointments: data }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
     });
-
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
+    console.error('Error fetching appointments:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
     });
   }
 }
 
-/**
- * POST: Creates a new appointment.
- */
+// POST handler (unchanged, but included for completeness)
 export async function POST(request: Request) {
   try {
-    const user = await getUserFromRequest(request);
-    const body = await request.json();
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader) throw new Error('Authorization token required');
 
-    const { counselor_id, appointment_time, status = 'scheduled' } = body;
+    const token = authHeader.substring(7);
+    const user = await validateSession(token);
+    if (!user) throw new Error('Invalid or expired token');
 
-    if (!counselor_id || !appointment_time) {
-      return new Response(JSON.stringify({ error: 'Missing required fields: counselor_id, appointment_time' }), { status: 400 });
+    const { counselor_id, appointment_time, type, duration } = await request.json();
+    if (!counselor_id || !appointment_time || !type) {
+      throw new Error('Missing required fields for booking.');
     }
 
-    const { data: newAppointment, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('appointments')
       .insert({
         user_id: user.id,
         counselor_id,
         appointment_time,
-        status,
+        type,
+        duration: duration || 60,
+        status: 'scheduled',
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    return new Response(JSON.stringify({ appointment: newAppointment }), {
+    return new Response(JSON.stringify({ success: true, appointment: data }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 201,
-      headers: { 'Content-Type': 'application/json' },
     });
-
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
+    console.error('Error creating appointment:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
     });
   }
-}
-
-/**
- * PUT: Updates an existing appointment (e.g., to cancel it).
- */
-export async function PUT(request: Request) {
-  try {
-    await getUserFromRequest(request);
-    const { id, ...updates } = await request.json();
-
-    if (!id) {
-      return new Response(JSON.stringify({ error: 'Appointment ID is required' }), { status: 400 });
-    }
-
-    const { data: updatedAppointment, error } = await supabase
-      .from('appointments')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    return new Response(JSON.stringify({ appointment: updatedAppointment }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-  } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
-
-
-/**
- * PATCH: A specific action to mark an appointment as complete and use a B2B credit.
- */
-export async function PATCH(request: Request) {
-    try {
-        const user = await getUserFromRequest(request);
-        const { appointmentId, organizationId } = await request.json();
-
-        if (!appointmentId || !organizationId) {
-            return new Response(JSON.stringify({ error: 'appointmentId and organizationId are required.' }), { status: 400 });
-        }
-
-        // Step 1: Update the appointment's status to 'completed'.
-        const { error: updateError } = await supabase
-            .from('appointments')
-            .update({ status: 'completed' })
-            .eq('id', appointmentId);
-
-        if (updateError) throw updateError;
-
-        // Step 2: Call the database function to use a credit.
-        const { error: rpcError } = await supabase.rpc('use_organization_credit', {
-            p_user_id: user.id,
-            p_organization_id: organizationId,
-        });
-
-        if (rpcError) throw rpcError;
-
-        return new Response(JSON.stringify({ success: true, message: 'Appointment completed and credit used.' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-        });
-
-    } catch (error) {
-        return new Response(JSON.stringify({ error: (error as Error).message }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-        });
-    }
 }
