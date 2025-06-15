@@ -1,60 +1,55 @@
 import React, { useEffect } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { AuthProvider, useAuth } from '../context/AuthContext';
-import { DataProvider } from '../context/DataContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { DataProvider } from '@/context/DataContext';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 
-// This is the component that will now correctly handle all navigation logic.
 function RootLayoutNav() {
-  // We get the full auth state, including the user's profile.
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    // 1. Wait until the authentication state is fully loaded from the context.
+    // Wait until the initial loading is complete before doing any navigation.
     if (loading) {
       return;
     }
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    // 2. If there is NO user, and we are not already in the authentication screens,
-    //    force a redirect to the welcome screen.
+    // Condition 1: If the user is not signed in and they are NOT in the auth group,
+    // redirect them to the welcome screen.
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/welcome');
     } 
-    // 3. If there IS a user AND their profile is loaded, and they are stuck on an auth screen,
-    //    redirect them to their correct home portal based on their role.
+    // Condition 2: If the user IS signed in and has a profile, and they ARE in the auth group,
+    // redirect them to their correct home portal.
     else if (user && profile && inAuthGroup) {
+      // Determine the home route based on the user's role from their profile.
       const homeRoute =
         profile.role === 'user' ? '/(tabs)' :
         profile.role === 'counselor' ? '/(counselor)/dashboard' :
         profile.role === 'employer' ? '/(employer)/dashboard' :
-        '/(auth)/welcome'; // Fallback in case of an unknown role
+        '/(auth)/welcome'; // Fallback to welcome screen if role is unknown
       router.replace(homeRoute);
     }
-  }, [user, profile, loading, segments, router]);
+  }, [user, profile, loading, segments, router]); // This effect depends on all these values
 
-  // While the AuthContext is initializing, we show a loading screen.
-  // This prevents the app from showing a broken screen before the redirection logic can run.
+  // While loading, show a full-screen spinner to prevent UI flashes.
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4f46e5" />
       </View>
     );
   }
-
-  // Once loading is complete, the <Slot /> component will render the correct screen
-  // based on the navigation state determined by the useEffect hook above.
+  
+  // Once loading is complete, render the current route.
   return <Slot />;
 }
 
-// This is the main layout component for your entire app.
 export default function RootLayout() {
-  // The provider structure is critical and correct: AuthProvider wraps everything.
   return (
     <AuthProvider>
       <DataProvider>
@@ -65,3 +60,12 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc' // Match your app's background color
+  }
+});

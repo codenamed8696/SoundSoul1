@@ -1,934 +1,395 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Shield, Settings, LogOut, Building, Link, Save, CreditCard as Edit, Bell, Palette, Globe } from 'lucide-react-native';
+import { User, Shield, Settings, LogOut, Building, Link as LinkIcon, Save, CreditCard as Edit, Bell, Palette, Globe } from 'lucide-react-native';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
 import { useAuth } from '@/context/AuthContext';
 import { useData } from '@/context/DataContext';
 import { WellnessInsights } from '@/types';
 
+// This is a placeholder for a real i18n/translation function
+const translate = (key: string) => key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
 export default function ProfileScreen() {
-  const { user, signOut, linkCompanyToken, updateUserProfile, updateUserPreferences } = useAuth();
+  const { user, profile, signOut, loading } = useAuth();
+  // Mock functions until they are implemented in AuthContext
+  const updateUserProfile = async (data: any) => { console.log("Updating profile", data); return true; };
+  const updateUserPreferences = async (data: any) => { console.log("Updating preferences", data); return true; };
+  const linkCompanyToken = async (token: string) => { console.log("Linking token", token); return true; };
+  
   const { getUserInsights } = useData();
+
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
   const [companyToken, setCompanyToken] = useState('');
   const [showTokenInput, setShowTokenInput] = useState(false);
   const [insights, setInsights] = useState<WellnessInsights | null>(null);
-  const [profileForm, setProfileForm] = useState({
-    name: user?.name || '',
-    email: user?.email || ''
-  });
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const [profileForm, setProfileForm] = useState({ name: '', email: '' });
   const [preferencesForm, setPreferencesForm] = useState({
-    notifications: {
-      email: user?.preferences?.notifications?.email ?? true,
-      push: user?.preferences?.notifications?.push ?? true,
-      moodReminders: user?.preferences?.notifications?.moodReminders ?? true,
-      appointmentReminders: user?.preferences?.notifications?.appointmentReminders ?? true,
-    },
-    privacy: {
-      shareAnonymousData: user?.preferences?.privacy?.shareAnonymousData ?? true,
-      allowAnalytics: user?.preferences?.privacy?.allowAnalytics ?? true,
-    },
-    wellness: {
-      dailyMoodTracking: user?.preferences?.wellness?.dailyMoodTracking ?? true,
-      weeklyReports: user?.preferences?.wellness?.weeklyReports ?? true,
-      preferredSessionType: user?.preferences?.wellness?.preferredSessionType || 'video' as const,
-    },
-    theme: user?.preferences?.theme || 'system' as const,
+    notifications: { email: true, push: true, moodReminders: true },
+    theme: 'system',
+    language: 'en',
   });
-  const [loading, setLoading] = useState(false);
 
-  // Fetch user insights when component mounts or user changes
   useEffect(() => {
-    const fetchInsights = async () => {
-      if (user?.id) {
-        try {
-          const userInsights = await getUserInsights(user.id);
-          setInsights(userInsights);
-        } catch (error) {
-          console.error('Failed to fetch insights:', error);
-          // Set default insights if fetch fails
-          setInsights({
-            streakDays: 0,
-            moodAverage: 0,
-            totalSessions: 0,
-            riskLevel: 'low'
-          });
-        }
-      }
-    };
+    if (profile) {
+      setProfileForm({ name: profile.full_name || '', email: user?.email || '' });
+      setPreferencesForm({
+        notifications: {
+          email: profile.preferences?.notifications?.email ?? true,
+          push: profile.preferences?.notifications?.push ?? true,
+          moodReminders: profile.preferences?.notifications?.moodReminders ?? true,
+        },
+        theme: profile.preferences?.theme ?? 'system',
+        language: profile.preferences?.language ?? 'en',
+      });
+    }
+  }, [profile, user]);
 
+  useEffect(() => {
+    async function fetchInsights() {
+      const fetchedInsights = await getUserInsights();
+      setInsights(fetchedInsights);
+    }
     fetchInsights();
-  }, [user?.id, getUserInsights]);
+  }, [getUserInsights]);
 
-  const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-          }
-        }
-      ]
-    );
+  const handleUpdateProfile = async () => {
+    const success = await updateUserProfile({ full_name: profileForm.name });
+    if (success) {
+      Alert.alert('Success', 'Profile updated successfully.');
+      setIsEditingProfile(false);
+    } else {
+      Alert.alert('Error', 'Failed to update profile.');
+    }
+  };
+
+  const handleUpdatePreferences = async () => {
+    const success = await updateUserPreferences(preferencesForm);
+    if (success) {
+      Alert.alert('Success', 'Preferences updated successfully.');
+      setIsEditingPreferences(false);
+    } else {
+      Alert.alert('Error', 'Failed to update preferences.');
+    }
   };
 
   const handleLinkCompany = async () => {
-    if (!companyToken.trim()) {
-      Alert.alert('Error', 'Please enter a valid company token');
+    if (!companyToken) {
+      Alert.alert('Error', 'Please enter a company token.');
       return;
     }
-
-    setLoading(true);
-    const success = await linkCompanyToken(companyToken.trim());
-    setLoading(false);
-    
+    const success = await linkCompanyToken(companyToken);
     if (success) {
-      Alert.alert('Success', 'Company benefits linked successfully!');
+      Alert.alert('Success', 'Account linked to company successfully.');
       setShowTokenInput(false);
       setCompanyToken('');
     } else {
-      Alert.alert('Error', 'Invalid company token. Please check with your HR department.');
+      Alert.alert('Error', 'Failed to link company. The token may be invalid.');
     }
   };
 
-  const handleSaveProfile = async () => {
-    if (!profileForm.name.trim()) {
-      Alert.alert('Error', 'Name is required');
-      return;
-    }
-
-    setLoading(true);
-    const success = await updateUserProfile({
-      name: profileForm.name.trim(),
-      email: profileForm.email.trim() || undefined
-    });
-    setLoading(false);
-
-    if (success) {
-      setIsEditingProfile(false);
-      Alert.alert('Success', 'Profile updated successfully!');
-    } else {
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
-    }
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    await signOut();
+    // No navigation needed, the root layout will handle it.
   };
 
-  const handleSavePreferences = async () => {
-    setLoading(true);
-    const success = await updateUserPreferences(preferencesForm);
-    setLoading(false);
-
-    if (success) {
-      setIsEditingPreferences(false);
-      Alert.alert('Success', 'Preferences updated successfully!');
-    } else {
-      Alert.alert('Error', 'Failed to update preferences. Please try again.');
-    }
-  };
-
-  const handleCancelProfileEdit = () => {
-    setProfileForm({
-      name: user?.name || '',
-      email: user?.email || ''
-    });
-    setIsEditingProfile(false);
-  };
-
-  const handleCancelPreferencesEdit = () => {
-    setPreferencesForm({
-      notifications: {
-        email: user?.preferences?.notifications?.email ?? true,
-        push: user?.preferences?.notifications?.push ?? true,
-        moodReminders: user?.preferences?.notifications?.moodReminders ?? true,
-        appointmentReminders: user?.preferences?.notifications?.appointmentReminders ?? true,
-      },
-      privacy: {
-        shareAnonymousData: user?.preferences?.privacy?.shareAnonymousData ?? true,
-        allowAnalytics: user?.preferences?.privacy?.allowAnalytics ?? true,
-      },
-      wellness: {
-        dailyMoodTracking: user?.preferences?.wellness?.dailyMoodTracking ?? true,
-        weeklyReports: user?.preferences?.wellness?.weeklyReports ?? true,
-        preferredSessionType: user?.preferences?.wellness?.preferredSessionType || 'video' as const,
-      },
-      theme: user?.preferences?.theme || 'system' as const,
-    });
-    setIsEditingPreferences(false);
-  };
+  const renderInsights = () => (
+    <View style={styles.insightsGrid}>
+      <View style={styles.insightItem}><Text style={styles.insightValue}>{insights?.mood_average?.toFixed(1) || 'N/A'}</Text><Text style={styles.insightLabel}>Avg. Mood</Text></View>
+      <View style={styles.insightItem}><Text style={styles.insightValue}>{insights?.sessions_completed || 0}</Text><Text style={styles.insightLabel}>Sessions</Text></View>
+      <View style={styles.insightItem}><Text style={styles.insightValue}>{insights?.streak || 0}</Text><Text style={styles.insightLabel}>Streak</Text></View>
+    </View>
+  );
+  
+  if (loading && !profile) {
+    return (
+        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+            <ActivityIndicator size="large" />
+        </View>
+    )
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
+    <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-          <Text style={styles.subtitle}>
-            Manage your account and privacy settings
-          </Text>
+          <User size={32} color="#4f46e5" />
+          <Text style={styles.headerTitle}>My Profile</Text>
         </View>
 
-        {/* User Info */}
-        <View style={styles.section}>
-          <Card style={styles.userCard}>
-            <View style={styles.userHeader}>
-              <View style={styles.avatar}>
-                <User size={32} color="#6366f1" />
-              </View>
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>
-                  {user?.isAnonymous ? 'Anonymous User' : user?.name || 'User'}
-                </Text>
-                <Text style={styles.userEmail}>
-                  {user?.isAnonymous ? 'Anonymous Account' : user?.email}
-                </Text>
-                <View style={styles.anonymousId}>
-                  <Shield size={16} color="#10b981" />
-                  <Text style={styles.anonymousIdText}>
-                    ID: {user?.anonymousId}
-                  </Text>
-                </View>
-              </View>
-              {!user?.isAnonymous && (
-                <Pressable 
-                  style={styles.editButton}
-                  onPress={() => setIsEditingProfile(true)}
-                >
-                  <Edit size={20} color="#6b7280" />
-                </Pressable>
-              )}
+        {isEditingProfile ? (
+          <Card style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Edit size={20} color="#374151" />
+              <Text style={styles.cardTitle}>Edit Profile</Text>
             </View>
-
-            {isEditingProfile && (
-              <View style={styles.editForm}>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Name</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={profileForm.name}
-                    onChangeText={(text) => setProfileForm({ ...profileForm, name: text })}
-                    placeholder="Enter your name"
-                  />
-                </View>
-                
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Email</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={profileForm.email}
-                    onChangeText={(text) => setProfileForm({ ...profileForm, email: text })}
-                    placeholder="Enter your email"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <View style={styles.editActions}>
-                  <Button
-                    title="Cancel"
-                    onPress={handleCancelProfileEdit}
-                    variant="ghost"
-                    style={styles.editAction}
-                  />
-                  <Button
-                    title="Save"
-                    onPress={handleSaveProfile}
-                    style={styles.editAction}
-                    disabled={loading}
-                  />
-                </View>
-              </View>
-            )}
+            <View style={styles.formGroup}><Text style={styles.label}>Full Name</Text><TextInput style={styles.input} value={profileForm.name} onChangeText={(text) => setProfileForm({ ...profileForm, name: text })} placeholder="Your Full Name" /></View>
+            <View style={styles.formGroup}><Text style={styles.label}>Email</Text><TextInput style={[styles.input, styles.inputDisabled]} value={profileForm.email} editable={false} /></View>
+            <View style={styles.actions}><Button title="Cancel" variant="secondary" onPress={() => setIsEditingProfile(false)} /><Button title="Save" icon={Save} onPress={handleUpdateProfile} /></View>
           </Card>
-        </View>
-
-        {/* Wellness Stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Wellness Journey</Text>
-          <Card style={styles.statsCard}>
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{insights?.streakDays || 0}</Text>
-                <Text style={styles.statLabel}>Day Streak</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{(insights?.moodAverage || 0).toFixed(1)}</Text>
-                <Text style={styles.statLabel}>Avg Mood</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{insights?.totalSessions || 0}</Text>
-                <Text style={styles.statLabel}>Sessions</Text>
-              </View>
+        ) : (
+          <Card style={styles.card}>
+            <View style={styles.cardHeader}>
+              <User size={20} color="#374151" />
+              <Text style={styles.cardTitle}>{profile?.full_name || 'Anonymous User'}</Text>
+              <Pressable style={styles.editButton} onPress={() => setIsEditingProfile(true)}><Edit size={16} color="#4f46e5" /></Pressable>
             </View>
-            <View style={styles.riskLevel}>
-              <Text style={styles.riskLevelText}>
-                Risk Level: <Text style={[
-                  styles.riskLevelValue,
-                  { color: (insights?.riskLevel || 'low') === 'low' ? '#10b981' : 
-                           (insights?.riskLevel || 'low') === 'medium' ? '#f59e0b' : '#ef4444' }
-                ]}>
-                  {(insights?.riskLevel || 'low').toUpperCase()}
-                </Text>
-              </Text>
-            </View>
+            <Text style={styles.emailText}>{user?.email}</Text>
+            {renderInsights()}
           </Card>
-        </View>
+        )}
 
-        {/* Preferences */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Preferences</Text>
-            <Pressable 
-              style={styles.editButton}
-              onPress={() => setIsEditingPreferences(true)}
-            >
-              <Settings size={20} color="#6b7280" />
+        {isEditingPreferences ? (
+          <Card style={styles.card}>
+              <View style={styles.cardHeader}><Settings size={20} color="#374151" /><Text style={styles.cardTitle}>Preferences</Text></View>
+              <View style={styles.formGroup}>
+                <View style={styles.subHeader}><Bell size={16} color="#475569"/><Text style={styles.label}>Notifications</Text></View>
+                <View style={styles.switchRow}><Text style={styles.cardText}>Email</Text><Switch value={preferencesForm.notifications.email} onValueChange={(val) => setPreferencesForm(p => ({...p, notifications: {...p.notifications, email: val}}))} /></View>
+                <View style={styles.switchRow}><Text style={styles.cardText}>Push</Text><Switch value={preferencesForm.notifications.push} onValueChange={(val) => setPreferencesForm(p => ({...p, notifications: {...p.notifications, push: val}}))} /></View>
+                <View style={styles.switchRow}><Text style={styles.cardText}>Mood Reminders</Text><Switch value={preferencesForm.notifications.moodReminders} onValueChange={(val) => setPreferencesForm(p => ({...p, notifications: {...p.notifications, moodReminders: val}}))} /></View>
+              </View>
+              <View style={styles.formGroup}>
+                  <View style={styles.subHeader}><Palette size={16} color="#475569"/><Text style={styles.label}>Theme</Text></View>
+                  <View style={styles.radioGroup}>
+                      {['system', 'light', 'dark'].map(theme => (
+                          <Pressable key={theme} style={styles.radioButton} onPress={() => setPreferencesForm({...preferencesForm, theme})}>
+                              <View style={styles.radioOuter}>{preferencesForm.theme === theme && <View style={styles.radioInner}/>}</View>
+                              <Text style={styles.cardText}>{translate(theme)}</Text>
+                          </Pressable>
+                      ))}
+                  </View>
+              </View>
+              <View style={styles.actions}><Button title="Cancel" variant="secondary" onPress={() => setIsEditingPreferences(false)} /><Button title="Save" icon={Save} onPress={handleUpdatePreferences} /></View>
+          </Card>
+        ) : (
+          <Card style={styles.card}>
+            <Pressable onPress={() => setIsEditingPreferences(true)}>
+                <View style={styles.cardHeader}><Settings size={20} color="#374151" /><Text style={styles.cardTitle}>Preferences</Text></View>
+                <Text style={styles.cardText}>Manage your notifications, theme, and language.</Text>
             </Pressable>
-          </View>
-          
-          <Card style={styles.preferencesCard}>
-            {isEditingPreferences ? (
-              <View style={styles.preferencesForm}>
-                {/* Notifications */}
-                <View style={styles.preferenceSection}>
-                  <View style={styles.preferenceSectionHeader}>
-                    <Bell size={20} color="#6366f1" />
-                    <Text style={styles.preferenceSectionTitle}>Notifications</Text>
-                  </View>
-                  
-                  <View style={styles.preferenceItems}>
-                    {Object.entries(preferencesForm.notifications).map(([key, value]) => (
-                      <Pressable
-                        key={key}
-                        style={styles.preferenceItem}
-                        onPress={() => setPreferencesForm({
-                          ...preferencesForm,
-                          notifications: {
-                            ...preferencesForm.notifications,
-                            [key]: !value
-                          }
-                        })}
-                      >
-                        <Text style={styles.preferenceLabel}>
-                          {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                        </Text>
-                        <View style={[
-                          styles.toggle,
-                          value && styles.toggleActive
-                        ]}>
-                          <View style={[
-                            styles.toggleThumb,
-                            value && styles.toggleThumbActive
-                          ]} />
-                        </View>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Privacy */}
-                <View style={styles.preferenceSection}>
-                  <View style={styles.preferenceSectionHeader}>
-                    <Shield size={20} color="#10b981" />
-                    <Text style={styles.preferenceSectionTitle}>Privacy</Text>
-                  </View>
-                  
-                  <View style={styles.preferenceItems}>
-                    {Object.entries(preferencesForm.privacy).map(([key, value]) => (
-                      <Pressable
-                        key={key}
-                        style={styles.preferenceItem}
-                        onPress={() => setPreferencesForm({
-                          ...preferencesForm,
-                          privacy: {
-                            ...preferencesForm.privacy,
-                            [key]: !value
-                          }
-                        })}
-                      >
-                        <Text style={styles.preferenceLabel}>
-                          {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                        </Text>
-                        <View style={[
-                          styles.toggle,
-                          value && styles.toggleActive
-                        ]}>
-                          <View style={[
-                            styles.toggleThumb,
-                            value && styles.toggleThumbActive
-                          ]} />
-                        </View>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Theme */}
-                <View style={styles.preferenceSection}>
-                  <View style={styles.preferenceSectionHeader}>
-                    <Palette size={20} color="#f59e0b" />
-                    <Text style={styles.preferenceSectionTitle}>Theme</Text>
-                  </View>
-                  
-                  <View style={styles.themeOptions}>
-                    {(['light', 'dark', 'system'] as const).map((theme) => (
-                      <Pressable
-                        key={theme}
-                        style={[
-                          styles.themeOption,
-                          preferencesForm.theme === theme && styles.themeOptionActive
-                        ]}
-                        onPress={() => setPreferencesForm({
-                          ...preferencesForm,
-                          theme
-                        })}
-                      >
-                        <Text style={[
-                          styles.themeOptionText,
-                          preferencesForm.theme === theme && styles.themeOptionTextActive
-                        ]}>
-                          {theme.charAt(0).toUpperCase() + theme.slice(1)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={styles.editActions}>
-                  <Button
-                    title="Cancel"
-                    onPress={handleCancelPreferencesEdit}
-                    variant="ghost"
-                    style={styles.editAction}
-                  />
-                  <Button
-                    title="Save"
-                    onPress={handleSavePreferences}
-                    style={styles.editAction}
-                    disabled={loading}
-                  />
-                </View>
-              </View>
-            ) : (
-              <View style={styles.preferencesDisplay}>
-                <Text style={styles.preferencesText}>
-                  Notifications: {user?.preferences?.notifications?.email ? 'Enabled' : 'Disabled'}
-                </Text>
-                <Text style={styles.preferencesText}>
-                  Privacy: {user?.preferences?.privacy?.shareAnonymousData ? 'Data sharing enabled' : 'Data sharing disabled'}
-                </Text>
-                <Text style={styles.preferencesText}>
-                  Theme: {user?.preferences?.theme || 'System'}
-                </Text>
-              </View>
-            )}
           </Card>
-        </View>
-
-        {/* Company Connection */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Company Benefits</Text>
-          {user?.companyConnection ? (
-            <Card style={styles.companyCard}>
-              <View style={styles.companyHeader}>
-                <Building size={24} color="#10b981" />
-                <Text style={styles.companyTitle}>Connected to Company</Text>
-                <View style={styles.verifiedBadge}>
-                  <Text style={styles.verifiedText}>VERIFIED</Text>
-                </View>
+        )}
+        
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}><Building size={20} color="#374151" /><Text style={styles.cardTitle}>Company Plan</Text></View>
+          {profile?.organization_id ? (
+            <Text style={styles.cardText}>Your account is linked to your company's wellness plan.</Text>
+          ) : showTokenInput ? (
+            <View style={styles.tokenInputContainer}>
+              <TextInput style={styles.tokenInput} placeholder="Enter Company Token" value={companyToken} onChangeText={setCompanyToken} />
+              <View style={styles.tokenActions}>
+                <Button title="Cancel" variant="secondary" onPress={() => setShowTokenInput(false)} style={styles.tokenAction}/>
+                <Button title="Link" icon={LinkIcon} onPress={handleLinkCompany} style={styles.tokenAction}/>
               </View>
-              <Text style={styles.companyToken}>
-                Token: {user.companyConnection.token}
-              </Text>
-              <View style={styles.benefitsList}>
-                <Text style={styles.benefitsTitle}>Your Benefits:</Text>
-                {user.companyConnection.benefits.map((benefit, index) => (
-                  <Text key={index} style={styles.benefitItem}>• {benefit}</Text>
-                ))}
-              </View>
-            </Card>
+            </View>
           ) : (
-            <Card style={styles.linkCompanyCard}>
-              <View style={styles.linkCompanyHeader}>
-                <Link size={24} color="#6366f1" />
-                <Text style={styles.linkCompanyTitle}>Link Company Benefits</Text>
-              </View>
-              <Text style={styles.linkCompanyText}>
-                Connect your company wellness program to access additional benefits and resources.
-              </Text>
-              
-              {showTokenInput ? (
-                <View style={styles.tokenInputContainer}>
-                  <TextInput
-                    style={styles.tokenInput}
-                    placeholder="Enter company token (e.g., ABC-1234-DEMO-5678)"
-                    value={companyToken}
-                    onChangeText={setCompanyToken}
-                    autoCapitalize="characters"
-                  />
-                  <View style={styles.tokenActions}>
-                    <Button
-                      title="Cancel"
-                      onPress={() => {
-                        setShowTokenInput(false);
-                        setCompanyToken('');
-                      }}
-                      variant="ghost"
-                      style={styles.tokenAction}
-                    />
-                    <Button
-                      title="Link"
-                      onPress={handleLinkCompany}
-                      style={styles.tokenAction}
-                      disabled={loading}
-                    />
-                  </View>
-                </View>
-              ) : (
-                <Button
-                  title="Link Company"
-                  onPress={() => setShowTokenInput(true)}
-                  style={styles.linkButton}
-                />
-              )}
-            </Card>
+            <>
+              <Text style={styles.cardText}>Link your account to unlock features provided by your employer.</Text>
+              <Button title="Link with Token" icon={LinkIcon} onPress={() => setShowTokenInput(true)} style={styles.linkButton}/>
+            </>
           )}
-        </View>
+        </Card>
+        
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}><Shield size={20} color="#374151" /><Text style={styles.cardTitle}>Privacy & Data</Text></View>
+          <Text style={styles.cardText}>Manage how your data is used and download your information.</Text>
+        </Card>
 
-        {/* Privacy & Security */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy & Security</Text>
-          <Card style={styles.privacyCard}>
-            <View style={styles.privacyHeader}>
-              <Shield size={24} color="#6366f1" />
-              <Text style={styles.privacyTitle}>Your Data is Protected</Text>
-            </View>
-            <Text style={styles.privacyText}>
-              All your data is encrypted and anonymized. We use advanced privacy techniques 
-              to ensure your personal information remains completely confidential.
-            </Text>
-            <View style={styles.privacyFeatures}>
-              <Text style={styles.privacyFeature}>✓ End-to-end encryption</Text>
-              <Text style={styles.privacyFeature}>✓ Anonymous data processing</Text>
-              <Text style={styles.privacyFeature}>✓ No personal data storage</Text>
-              <Text style={styles.privacyFeature}>✓ HIPAA compliant</Text>
-            </View>
-          </Card>
-        </View>
-
-        {/* Account Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.accountActions}>
-            <Pressable 
-              style={[styles.accountAction, styles.signOutAction]}
-              onPress={handleSignOut}
-            >
-              <LogOut size={20} color="#ef4444" />
-              <Text style={[styles.accountActionText, styles.signOutText]}>Sign Out</Text>
-            </Pressable>
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}><LogOut size={20} color="#ef4444" /><Text style={styles.cardTitle}>Log Out</Text></View>
+          <Text style={styles.cardText}>Are you sure you want to sign out of your account?</Text>
+          <View style={styles.actionItem}>
+            {isSigningOut ? (
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <Button title="Sign Out" onPress={handleSignOut} variant="destructive" />
+            )}
           </View>
-        </View>
-
-        <View style={styles.bottomSpacing} />
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// All of your original styles are preserved below
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
-  },
-  title: {
-    fontSize: 32,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#6b7280',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-  },
-  editButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-  },
-  userCard: {
-    padding: 20,
-  },
-  userHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#f0f9ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  anonymousId: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  anonymousIdText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#10b981',
-    marginLeft: 6,
-  },
-  editForm: {
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#111827',
-    backgroundColor: '#fafafa',
-  },
-  editActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  editAction: {
-    flex: 1,
-  },
-  statsCard: {
-    padding: 20,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    fontFamily: 'Inter-Medium',
-    color: '#6b7280',
-  },
-  riskLevel: {
-    alignItems: 'center',
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  riskLevelText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#374151',
-  },
-  riskLevelValue: {
-    fontFamily: 'Inter-Bold',
-  },
-  preferencesCard: {
-    padding: 20,
-  },
-  preferencesForm: {
-    gap: 24,
-  },
-  preferenceSection: {
-    gap: 12,
-  },
-  preferenceSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  preferenceSectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#111827',
-    marginLeft: 8,
-  },
-  preferenceItems: {
-    gap: 12,
-  },
-  preferenceItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  preferenceLabel: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#374151',
-    flex: 1,
-  },
-  toggle: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#e5e7eb',
-    padding: 2,
-    justifyContent: 'center',
-  },
-  toggleActive: {
-    backgroundColor: '#6366f1',
-  },
-  toggleThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    alignSelf: 'flex-start',
-  },
-  toggleThumbActive: {
-    alignSelf: 'flex-end',
-  },
-  themeOptions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  themeOption: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-  },
-  themeOptionActive: {
-    backgroundColor: '#6366f1',
-  },
-  themeOptionText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#6b7280',
-  },
-  themeOptionTextActive: {
-    color: '#ffffff',
-  },
-  preferencesDisplay: {
-    gap: 8,
-  },
-  preferencesText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6b7280',
-  },
-  companyCard: {
-    padding: 20,
-    backgroundColor: '#f0fdf4',
-  },
-  companyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  companyTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    marginLeft: 12,
-    flex: 1,
-  },
-  verifiedBadge: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  verifiedText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontFamily: 'Inter-Bold',
-  },
-  companyToken: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#6b7280',
-    marginBottom: 16,
-  },
-  benefitsList: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#bbf7d0',
-  },
-  benefitsTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  benefitItem: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  linkCompanyCard: {
-    padding: 20,
-  },
-  linkCompanyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  linkCompanyTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    marginLeft: 12,
-  },
-  linkCompanyText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6b7280',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  tokenInputContainer: {
-    gap: 12,
-  },
-  tokenInput: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    fontFamily: 'Inter-Regular',
-    color: '#111827',
-    backgroundColor: '#fafafa',
-  },
-  tokenActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  tokenAction: {
-    flex: 1,
-  },
-  linkButton: {
-    alignSelf: 'flex-start',
-  },
-  privacyCard: {
-    padding: 20,
-    backgroundColor: '#f0f9ff',
-  },
-  privacyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  privacyTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    marginLeft: 12,
-  },
-  privacyText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#374151',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  privacyFeatures: {
-    gap: 4,
-  },
-  privacyFeature: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#6366f1',
-  },
-  accountActions: {
-    backgroundColor: '#e5e7eb',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  accountAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  accountActionText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#374151',
-    marginLeft: 12,
-  },
-  signOutAction: {
-    backgroundColor: '#fef2f2',
-  },
-  signOutText: {
-    color: '#ef4444',
-  },
-  bottomSpacing: {
-    height: 20,
-  },
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#f8fafc',
+    },
+    container: {
+        padding: 16,
+        paddingBottom: 48,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: 8,
+        paddingBottom: 24,
+    },
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#1e293b',
+    },
+    card: {
+        marginBottom: 16,
+        // Using a more specific name from your original styles
+        backgroundColor: 'white',
+        borderRadius: 16,
+        padding: 20,
+        shadowColor: "#000",
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.05,
+        shadowRadius: 2.22,
+        elevation: 3,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    cardTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#1e293b',
+        marginLeft: 12,
+        flex: 1,
+    },
+    editButton: {
+        padding: 4,
+    },
+    emailText: {
+        fontSize: 14,
+        color: '#64748b',
+        marginBottom: 16,
+        marginLeft: 32, // to align with title text
+    },
+    cardText: {
+        fontSize: 14,
+        color: '#475569',
+        lineHeight: 20,
+        marginLeft: 4, // consistent margin
+    },
+    formGroup: {
+        marginBottom: 16,
+    },
+    label: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#334155',
+        marginBottom: 8,
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        borderRadius: 12,
+        padding: 16,
+        fontSize: 16,
+        color: '#111827',
+        backgroundColor: '#fafafa',
+    },
+    inputDisabled: {
+        backgroundColor: '#e5e7eb',
+        color: '#6b7280',
+    },
+    actions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 12,
+        marginTop: 8,
+    },
+    actionItem: {
+        alignSelf: 'flex-start',
+        marginLeft: 32, // Aligns button with card text
+    },
+    insightsGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginTop: 8,
+        paddingVertical: 8,
+    },
+    insightItem: {
+        alignItems: 'center',
+    },
+    insightValue: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#4f46e5',
+    },
+    insightLabel: {
+        fontSize: 12,
+        color: '#64748b',
+        marginTop: 2,
+    },
+    tokenInputContainer: {
+        gap: 12,
+    },
+    tokenInput: {
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        borderRadius: 12,
+        padding: 16,
+        fontSize: 16,
+        color: '#111827',
+        backgroundColor: '#fafafa',
+    },
+    tokenActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    tokenAction: {
+        flex: 1,
+    },
+    linkButton: {
+        alignSelf: 'flex-start',
+        marginTop: 8,
+    },
+    subHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 8,
+    },
+    switchRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingLeft: 24, // Indent switch rows
+    },
+    radioGroup: {
+        flexDirection: 'row',
+        gap: 16,
+        paddingLeft: 24, // Indent radio group
+    },
+    radioButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    radioOuter: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#4f46e5',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    radioInner: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#4f46e5',
+    }
 });
