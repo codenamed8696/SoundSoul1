@@ -1,10 +1,11 @@
+// app/api/therapy/appointments+api.ts
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '../../supabase/functions/_shared/cors.ts';
-import { validateSession } from '../../utils/authStore.ts';
+import { corsHeaders } from '../../_shared/cors';
+import { validateSession } from '../../utils/authStore'; // Preserving your auth utility
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!);
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function GET(request: Request) {
   try {
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
     const user = await validateSession(token);
     if (!user) throw new Error('Invalid or expired token');
 
-    // THE FIX: Using explicit foreign key names for both nested joins.
+    // Corrected query with explicit foreign key names for nested joins
     const { data, error } = await supabaseAdmin
       .from('appointments')
       .select(`
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching appointments:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST handler (unchanged, but included for completeness)
+// Your POST handler is preserved as it was correct
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 201,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating appointment:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
