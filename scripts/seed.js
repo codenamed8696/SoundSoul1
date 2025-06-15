@@ -1,109 +1,188 @@
-// FINAL SCRIPT - This version REMOVES the cleanup function and assumes a manually purged database.
+// This script is written from scratch based on the provided "Supabase Snippet Database Structure Overview.csv" file.
+// It correctly handles all foreign key relationships and data types.
 
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 const { faker } = require('@faker-js/faker');
 
-// --- CONFIGURATION ---
-const NUM_ORGANIZATIONS = 15;
-const NUM_COUNSELORS = 7;
+// --- SCRIPT CONFIGURATION ---
+const NUM_COMPANIES = 20;
+const NUM_COUNSELORS = 15;
 const NUM_USERS = 100;
-// ---------------------
+// ----------------------------
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; 
+
+// --- SAFETY CHECK ---
+if (process.env.DANGEROUSLY_WIPE_DATABASE !== 'true') {
+  console.error('\n❌ SAFETY LOCK ENGAGED. ❌');
+  console.error('This script is designed to completely wipe all data and users from your database.');
+  console.error('To proceed, you must add DANGEROUSLY_WIPE_DATABASE=true to your .env file.');
+  process.exit(1);
+}
+// --------------------
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error("Supabase URL or Service Key is missing. Make sure your .env file is in the root directory and contains the correct keys.");
+  throw new Error("Supabase URL or Service Key is missing. Make sure your .env file is correctly set up with EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY.");
 }
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-async function main() {
-  console.log('\n--- Starting new data seeding on a clean database---');
+// --- HELPER FUNCTIONS ---
+const runStep = async (title, fn) => {
+  console.log(`\n🔄 ${title}...`);
+  try {
+    const result = await fn();
+    console.log(`✅ ${title} - SUCCESS`);
+    return result;
+  } catch (error) {
+    console.error(`\n❌ ${title} - FAILED`);
+    console.error('Error:', error.message);
+    process.exit(1);
+  }
+};
 
-  // 1. Create Organizations
-  console.log(`\nCreating ${NUM_ORGANIZATIONS} organizations...`);
-  const organizations = Array.from({ length: NUM_ORGANIZATIONS }, () => ({
-    name: faker.company.name(),
-    industry: faker.company.buzzNoun(),
-  }));
-  const { data: createdOrganizations, error: orgError } = await supabaseAdmin.from('organizations').insert(organizations).select();
-  if (orgError) throw new Error(`Error creating organizations: ${orgError.message}`);
-  console.log(`Successfully created ${createdOrganizations.length} organizations.`);
+// --- MAIN SEEDING SCRIPT ---
 
-  // 2. Create Counselors
-  console.log(`\nCreating ${NUM_COUNSELORS} counselors...`);
-  const counselorSpecs = ['CBT', 'DBT', 'Trauma-Informed', 'Grief Counseling', 'Addiction', 'Anxiety'];
-  let createdCounselors = [];
-  for (let i = 0; i < NUM_COUNSELORS; i++) {
-    const email = `counselor${i}@example.com`;
-    // Create the user in the auth system first
-    const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.admin.createUser({ email, password: 'password', email_confirm: true });
-    if (authError) throw new Error(`Could not create counselor auth user: ${authError.message}`);
+async function seedDatabase() {
+    console.log('--- Starting Database Seeding Script ---');
+
+    // 1. WIPE ALL EXISTING DATA (DANGEROUS)
+    await runStep('Wiping all dependent data', async () => {
+        await supabaseAdmin.from('mood_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await supabaseAdmin.from('appointments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    });
     
-    // Next, UPDATE the profile that was automatically created by the trigger
-    const { data: updatedProfile, error: profileError } = await supabaseAdmin.from('profiles').update({
-        full_name: faker.person.fullName(),
-        role: 'counselor',
-        avatar_url: faker.image.avatar()
-    }).eq('id', authUser.id).select().single();
-    if (profileError) throw new Error(`Could not UPDATE counselor profile: ${profileError.message}`);
+    await runStep('Wiping all authentication users (cascades to profiles and counselors)', async () => {
+        const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+        if (error) throw error;
+        for (const user of users) {
+            await supabaseAdmin.auth.admin.deleteUser(user.id);
+        }
+    });
 
-    // Finally, create the counselor-specific record
-    const { data: newCounselor, error: counselorError } = await supabaseAdmin.from('counselors').insert({
-        profile_id: updatedProfile.id,
-        bio: faker.person.bio(),
-        specialties: faker.helpers.arrayElements(counselorSpecs, 2),
-        status: 'active' 
-    }).select().single();
-    if (counselorError) throw new Error(`Could not create counselor record: ${counselorError.message}`);
-    createdCounselors.push(newCounselor);
-  }
-  console.log(`Successfully created ${createdCounselors.length} counselors.`);
+    await runStep('Wiping remaining public data (organizations)', async () => {
+        await supabaseAdmin.from('organizations').delete().neq('id', 0);
+    });
 
-  // 3. Create Users
-  console.log(`\nCreating ${NUM_USERS} users...`);
-  let createdProfiles = [];
-  for (let i = 0; i < NUM_USERS; i++) {
-    const email = `user${i}@example.com`;
-    const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.admin.createUser({ email, password: 'password', email_confirm: true });
-    if (authError) { console.warn(`Skipping user ${email}: ${authError.message}`); continue; }
+    // 2. SEED ORGANIZATIONS
+    const createdOrganizations = await runStep(`Creating ${NUM_COMPANIES} organizations`, async () => {
+        const organizations = Array.from({ length: NUM_COMPANIES }, () => ({
+            name: faker.company.name(),
+            industry: faker.company.buzzNoun(),
+        }));
+        const { data, error } = await supabaseAdmin.from('organizations').insert(organizations).select('id');
+        if (error) throw error;
+        return data;
+    });
 
-    const { data: updatedProfile, error: profileError } = await supabaseAdmin.from('profiles').update({
-      full_name: faker.person.fullName(),
-      role: 'user',
-      avatar_url: faker.image.avatar(),
-      organization_id: faker.helpers.arrayElement(createdOrganizations).id,
-      counselor_id: faker.helpers.arrayElement(createdCounselors).id,
-    }).eq('id', authUser.id).select().single();
-    if (profileError) throw new Error(`Could not UPDATE user profile for ${email}: ${profileError.message}`);
-    createdProfiles.push(updatedProfile);
-  }
-  console.log(`Successfully created ${createdProfiles.length} users.`);
-  
-  // 4. Create Mood Entries & Appointments
-  console.log('\nCreating mood entries and appointments...');
-  const moodEntries = [];
-  const appointments = [];
-  for (const profile of createdProfiles) {
-    for (let i = 0; i < 15; i++) {
-        moodEntries.push({ user_id: profile.id, mood_score: faker.number.int({ min: 1, max: 5 }), created_at: faker.date.recent({ days: 90 }) });
-    }
-    if (faker.datatype.boolean(0.5)) {
-        appointments.push({ user_id: profile.id, counselor_id: profile.counselor_id, appointment_time: faker.date.soon({ days: 30 }), type: 'video', status: 'scheduled' });
-    }
-  }
-  await supabaseAdmin.from('mood_entries').insert(moodEntries);
-  await supabaseAdmin.from('appointments').insert(appointments);
-  console.log(`Successfully created ${moodEntries.length} mood entries and ${appointments.length} appointments.`);
+    // 3. SEED COUNSELORS
+    const createdCounselors = await runStep(`Creating ${NUM_COUNSELORS} counselors`, async () => {
+        let counselors = [];
+        for (let i = 0; i < NUM_COUNSELORS; i++) {
+            const firstName = faker.person.firstName();
+            const lastName = faker.person.lastName();
+            const email = `counselor${i + 1}@soundsoul.com`;
 
-  console.log('\n--- Seeding script finished successfully! ---');
-  console.log('You can now log in with users like user0@example.com / password');
+            // ✅ THE FIX: Auto-confirm the email upon creation.
+            const { data: authData, error: authError } = await supabaseAdmin.auth.signUp({
+                email,
+                password: 'password123',
+                options: {
+                    email_confirm: true, // This confirms the user immediately
+                    data: {
+                        full_name: `${firstName} ${lastName}`,
+                        avatar_url: faker.image.avatar()
+                    }
+                }
+            });
+            if (authError) throw authError;
+
+            const profileId = authData.user.id;
+
+            const { data: counselorData, error: counselorError } = await supabaseAdmin.from('counselors').insert({
+                profile_id: profileId,
+                specialties: faker.helpers.arrayElements(['Anxiety', 'CBT', 'Trauma', 'Family Therapy', 'ADHD'], { min: 2, max: 4 }),
+            }).select('id').single();
+            if (counselorError) throw counselorError;
+
+            await supabaseAdmin.from('profiles').update({ role: 'counselor' }).eq('id', profileId);
+            counselors.push(counselorData);
+        }
+        return counselors;
+    });
+
+    // 4. SEED USERS
+    const createdUsers = await runStep(`Creating ${NUM_USERS} users`, async () => {
+        let users = [];
+        for (let i = 0; i < NUM_USERS; i++) {
+            const firstName = faker.person.firstName();
+            const lastName = faker.person.lastName();
+            const email = `user${i + 1}@soundsoul.com`;
+
+            // ✅ THE FIX: Auto-confirm the email upon creation.
+            const { data: authData, error: authError } = await supabaseAdmin.auth.signUp({
+                email,
+                password: 'password123',
+                options: {
+                    email_confirm: true, // This confirms the user immediately
+                    data: {
+                        full_name: `${firstName} ${lastName}`,
+                        avatar_url: faker.image.avatar()
+                    }
+                }
+            });
+            if (authError) throw authError;
+
+            const userId = authData.user.id;
+            const assignedCounselorId = faker.helpers.arrayElement(createdCounselors).id;
+            
+            const { error: profileError } = await supabaseAdmin.from('profiles').update({
+                role: 'user',
+                organization_id: faker.helpers.arrayElement(createdOrganizations).id,
+                counselor_id: assignedCounselorId
+            }).eq('id', userId);
+            if (profileError) throw profileError;
+
+            users.push({ id: userId, counselor_id: assignedCounselorId });
+        }
+        return users;
+    });
+
+    // 5. SEED APPOINTMENTS AND MOOD ENTRIES
+    await runStep('Creating appointments and mood entries for users', async () => {
+        let appointments = [];
+        let moodEntries = [];
+        for (const user of createdUsers) {
+            if (!user.counselor_id) continue;
+            for (let i = 0; i < faker.number.int({ min: 1, max: 3 }); i++) {
+                appointments.push({
+                    user_id: user.id,
+                    counselor_id: user.counselor_id,
+                    appointment_time: faker.date.soon({ days: 60 }),
+                    status: faker.helpers.arrayElement(['confirmed', 'completed', 'cancelled']),
+                    type: 'video'
+                });
+            }
+            for (let i = 0; i < faker.number.int({ min: 20, max: 50 }); i++) {
+                moodEntries.push({
+                    user_id: user.id,
+                    mood_score: faker.number.int({ min: 1, max: 5 }),
+                    notes: faker.lorem.sentence(),
+                    created_at: faker.date.recent({ days: 90 })
+                });
+            }
+        }
+        if (appointments.length > 0) await supabaseAdmin.from('appointments').insert(appointments);
+        if (moodEntries.length > 0) await supabaseAdmin.from('mood_entries').insert(moodEntries);
+    });
+
+    console.log('\n--- ✅ Database Seeding Complete! ---');
+    console.log('You can now log in with accounts like:');
+    console.log('- user1@soundsoul.com');
+    console.log('- counselor1@soundsoul.com');
+    console.log('All passwords are "password123".');
 }
 
-main().catch(error => {
-    console.error("\nAN ERROR OCCURRED DURING SEEDING:");
-    console.error(error);
-    process.exit(1);
-});
+seedDatabase();
