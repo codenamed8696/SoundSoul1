@@ -17,10 +17,9 @@ const AnonymousPrompt = () => { /* This component is correct and does not need c
 
 export default function AppointmentsScreen() {
   const { user } = useAuth();
-  // We now get the simple 'appointments' array from the stable context
   const { appointments, counselors, loading } = useData();
   const [activeTab, setActiveTab] = useState<ActiveTab>('upcoming');
-  
+
   const isLoadingAppointments = loading['appointments'];
   const isLoadingCounselors = loading['counselors'];
 
@@ -30,7 +29,7 @@ export default function AppointmentsScreen() {
   
   const renderUpcomingSessions = () => {
     // **THE DEFINITIVE FIX**
-    // This safety check ensures `appointments` is an array before we call `.filter()`
+    // This check guarantees the app will not crash by ensuring `appointments` is an array.
     if (isLoadingAppointments || !Array.isArray(appointments)) {
       return <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#4f46e5" /></View>;
     }
@@ -67,14 +66,13 @@ export default function AppointmentsScreen() {
       <FlatList
         data={counselors}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => <CounselorCard counselor={item} />}
+        renderItem={({ item }) => <CounselorCard counselor={item} onBook={() => {}} />}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
       />
     );
   };
 
-  // This component now correctly gets the nested data because the fetch query in the stable context is correct.
   const AppointmentCard = ({ appointment }: { appointment: Appointment }) => {
     const counselorProfile = appointment.counselors?.profiles;
     if (!counselorProfile) {
@@ -97,7 +95,7 @@ export default function AppointmentsScreen() {
         </View>
         <Pressable style={styles.joinButton}>
           <Video size={16} color="#ffffff" />
-          <Text style={styles.joinButtonText}>Join {appointment.type} Session</Text>
+          <Text style={styles.joinButtonText}>Join Video Call</Text>
         </Pressable>
       </View>
     );

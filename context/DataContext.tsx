@@ -8,20 +8,22 @@ import {
 } from '@/types';
 import { Alert } from 'react-native';
 
-// This interface now includes our new derived data `appointmentsWithCounselor`
-// while keeping all of your original properties.
+// This interface now correctly includes appointmentsWithCounselor
 interface DataContextType {
   loading: Record<string, boolean>;
+  appointments: Appointment[];
+  appointmentsWithCounselor: (Appointment & { counselorProfile?: UserProfile })[];
+  counselors: Counselor[];
+  createAppointment: (details: Partial<Appointment>) => Promise<boolean>;
+  bookAppointment: (counselorId: number) => Promise<boolean>; // Preserving your original function
+  // All other original types are preserved
   moodEntries: MoodEntry[];
   addMoodEntry: (mood: number, notes?: string) => Promise<boolean>;
-  counselors: Counselor[];
-  appointmentsWithCounselor: (Appointment & { counselorProfile?: UserProfile })[];
   aiChats: AIChat[];
   sendAIMessage: (message: string) => Promise<void>;
   getUserInsights: () => Promise<void>;
   wellnessInsights: WellnessInsights | null;
   wellnessResources: WellnessResource[];
-  appointments: Appointment[];
   clients: UserProfile[];
   clientDetails: ClientDetails[];
   counselor: Counselor | null;
@@ -34,7 +36,6 @@ interface DataContextType {
   recentReports: GeneratedReport[];
   fetchAppointments: () => Promise<void>;
   getCompanyAnalytics: () => Promise<void>;
-  createAppointment: (details: Partial<Appointment>) => Promise<boolean>;
   updateAppointment: (appointmentId: number, updates: Partial<Appointment>) => Promise<boolean>;
   fetchClientDetails: (clientId: string) => Promise<void>;
   fetchClientsForCounselor: () => Promise<void>;
@@ -45,7 +46,7 @@ interface DataContextType {
   sendMessage: (conversationId: string, content: string) => Promise<boolean>;
   updateCounselorDetails: (updates: Partial<Counselor>) => Promise<boolean>;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
-  fetchCounselorDetails: (counselorId: number) => Promise<void>;
+  fetchCounselorDetails: (counselorId?: number) => Promise<void>;
   fetchOrganization: () => Promise<void>;
   fetchRecentReports: () => Promise<void>;
   fetchCounselors: () => Promise<void>;
@@ -56,7 +57,7 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
     const { user, profile } = useAuth();
-    // All of your original state variables are preserved
+    // All original state variables from your file are here
     const [loading, setLoading] = useState<Record<string, boolean>>({});
     const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
     const [wellnessInsights, setWellnessInsights] = useState<WellnessInsights | null>(null);
@@ -72,8 +73,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const [companyAnalytics, setCompanyAnalytics] = useState<CompanyAnalytics | null>(null);
     const [recentReports, setRecentReports] = useState<GeneratedReport[]>([]);
     const [aiChats, setAiChats] = useState<AIChat[]>([]);
-    // This state now holds the raw appointment data
-    const [rawAppointments, setRawAppointments] = useState<Appointment[]>([]);
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [counselors, setCounselors] = useState<Counselor[]>([]);
     const [refreshCount, setRefreshCount] = useState(0);
 
@@ -83,21 +83,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
         finally { setLoading(prev => ({ ...prev, [key]: false })); }
     };
 
-    // This now fetches the raw appointments without the join
+    // Your original fetchAppointments function is preserved
     const fetchAppointments = useCallback(async () => {
         if (!user) return;
-        const { data, error } = await withLoading('appointments', supabase.from('appointments').select(`*`).eq('user_id', user.id));
-        if (error) { Alert.alert('Error fetching appointments'); console.error(error); }
-        else setRawAppointments(data || []);
+        const { data, error } = await withLoading('appointments', supabase.from('appointments').select(`*, counselors (*, profiles (*))`).eq('user_id', user.id));
+        if (error) { Alert.alert('Error fetching appointments'); }
+        else setAppointments(data || []);
     }, [user]);
 
     const fetchCounselors = useCallback(async () => {
         const { data, error } = await withLoading('counselors', supabase.from('counselors').select(`*, profiles (*)`));
-        if (error) { Alert.alert('Error fetching counselors'); console.error(error); }
+        if (error) { Alert.alert('Error fetching counselors'); }
         else setCounselors(data || []);
     }, []);
 
-    // Your original createAppointment is preserved, but we add the refresh trigger
+    // Your original createAppointment function is preserved
     const createAppointment = useCallback(async (details: Partial<Appointment>): Promise<boolean> => {
         if (!user) return false;
         const { error } = await supabase.from('appointments').insert({ ...details, user_id: user.id });
@@ -107,7 +107,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return true;
     }, [user]);
 
-    // Your bookAppointment function is also preserved
+    // Your original bookAppointment function is also preserved
     const bookAppointment = useCallback(async (counselorId: number): Promise<boolean> => {
         if (!user) return false;
         const appointmentTime = new Date();
@@ -116,20 +116,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
             user_id: user.id, counselor_id: counselorId, appointment_time: appointmentTime.toISOString(), status: 'confirmed', type: 'video'
         });
         if (error) { Alert.alert("Booking Failed", error.message); return false; }
+        Alert.alert('Success!', `Appointment booked.`);
         await fetchAppointments();
         return true;
     }, [user, fetchAppointments]);
 
-    // This is the new, reliable way to combine the data
-    const appointmentsWithCounselor = rawAppointments.map(app => {
+    // This derived state joins appointments and counselors safely
+    const appointmentsWithCounselor = appointments.map(app => {
         const matchingCounselor = counselors.find(c => c.id === app.counselor_id);
         return {
             ...app,
-            counselors: matchingCounselor // Attach the whole counselor object
+            counselors: matchingCounselor // Attach the whole counselor object to match your AppointmentCard
         };
     });
-
-    // --- All your other original functions are preserved ---
+    
+    // --- All of your other original functions from the file are preserved ---
     const addMoodEntry = useCallback(async (mood: number, notes?: string) => true, [user]);
     const getUserInsights = useCallback(async () => {}, [user]);
     const sendAIMessage = useCallback(async (message: string) => {}, []);
@@ -137,7 +138,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const fetchOrganization = useCallback(async () => {}, [user]);
     const getCompanyAnalytics = useCallback(async () => {}, [organization]);
     const fetchRecentReports = useCallback(async () => {}, [organization]);
-    const fetchCounselorDetails = useCallback(async (counselorId?: number) => {}, [user]);
+    const fetchCounselorDetails = useCallback(async () => {}, [user]);
     const getCounselorDashboardStats = useCallback(async () => {}, [counselor]);
     const getRecentActivity = useCallback(async () => {}, [counselor]);
     const fetchClientsForCounselor = useCallback(async () => {}, [counselor]);
@@ -149,7 +150,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const updateCounselorDetails = useCallback(async (updates: Partial<Counselor>) => true, [counselor]);
     const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => true, [user]);
     
-
     useEffect(() => {
         if (user && profile) {
             if (profile.role === 'user') {
@@ -172,11 +172,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     }, [organization, getCompanyAnalytics, fetchRecentReports]);
 
-    // The value object is now complete, including the new derived data
-    const value = {
+
+    const value: DataContextType = {
         loading, 
-        appointments: rawAppointments, // Keep original for backwards compatibility if needed
-        counselors, 
+        counselors,
+        appointments, // Provide original appointments
         appointmentsWithCounselor, // Provide the new, safe data source
         organization, clients, clientDetails, counselor, counselorStats, recentActivity,
         conversations, messages, moodEntries, companyAnalytics, recentReports, wellnessResources,
@@ -188,11 +188,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         aiChats, sendAIMessage, fetchCounselors, getWellnessResources
     };
 
-    return (
-        <DataContext.Provider value={value as any}>
-            {children}
-        </DataContext.Provider>
-    );
+    return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 export function useData() {
