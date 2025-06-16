@@ -3,15 +3,17 @@ import { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { Profile } from '../types';
 
+// The context type no longer includes signInWithGoogle or signInWithApple
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   profile: Profile | null;
-  loading: boolean; // This state is crucial for navigation
+  loading: boolean;
   signIn: (email, password) => Promise<{ error: any | null }>;
   signOut: () => Promise<void>;
   signUp: (email, password, name) => Promise<{ error: any | null }>;
   signInAnonymously: () => Promise<{ error: any | null }>;
+  updateUserRole: (role: 'user' | 'counselor' | 'employer') => Promise<{ error: any | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,13 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(newSession?.user ?? null);
         
         if (newSession?.user) {
-          // When a new session appears (e.g., after sign-in),
-          // set loading to true while we fetch the new profile.
           setLoading(true);
           await getProfileForUser(newSession.user);
           setLoading(false);
         } else {
-          // If the session is null (sign-out), clear the profile.
           setProfile(null);
         }
       }
@@ -96,11 +95,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setProfile(null); // Explicitly clear profile on sign out
+    setProfile(null);
   };
 
   const signUp = async (email, password, name) => {
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+    const { error } = await supabase.auth.signUp({ 
+      email, 
+      password, 
+      options: { 
+        data: { 
+          full_name: name 
+        } 
+      } 
+    });
     return { error };
   };
   
@@ -108,8 +115,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInAnonymously();
     return { error };
   };
+
+  const updateUserRole = async (role: 'user' | 'counselor' | 'employer') => {
+    if (!user) {
+      return { error: { message: "No user is currently signed in." } };
+    }
+    const { error } = await supabase
+      .from('profiles')
+      .update({ role: role })
+      .eq('id', user.id);
+    
+    if (!error) {
+      await getProfileForUser(user);
+    }
+
+    return { error };
+  };
   
-  const value = { session, user, profile, loading, signIn, signOut, signUp, signInAnonymously };
+  // The context value now only includes the methods we are actually using.
+  const value = { 
+    session, 
+    user, 
+    profile, 
+    loading, 
+    signIn, 
+    signOut, 
+    signUp, 
+    signInAnonymously, 
+    updateUserRole 
+  };
 
   return (
     <AuthContext.Provider value={value}>

@@ -3,30 +3,34 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityInd
 import { Link, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { GradientBackground } from '@/components/common/GradientBackground';
-import { Mail, Lock, ArrowLeft } from 'lucide-react-native';
+import { Mail, Lock, User, ArrowLeft } from 'lucide-react-native';
 import { Card } from '@/components/common/Card';
 import { Button } from '@/components/common/Button';
-import { GoogleIcon } from '@/components/common/GoogleIcon'; // Import icon
-import { AppleIcon } from '@/components/common/AppleIcon'; // Import icon
+import { GoogleIcon } from '@/components/common/GoogleIcon';
+import { AppleIcon } from '@/components/common/AppleIcon';
 
-const LoginScreen = () => {
+const SignupScreen = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { signIn, loading } = useAuth(); // Removed social methods for now
+  const { signUp, loading } = useAuth();
   const router = useRouter();
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password.');
+  const handleSignup = async () => {
+    if (!name || !email || !password) {
+      Alert.alert('Error', 'Please fill in all fields.');
       return;
     }
-    const { error } = await signIn(email, password);
+    const { error } = await signUp(email, password, name);
     if (error) {
-      Alert.alert('Login Error', error.message);
+      Alert.alert('Registration Error', error.message);
+    } else {
+      // ** CHANGE HERE: Navigate to role selection instead of login **
+      Alert.alert('Account Created!', 'Please verify your email, then choose your role to get started.');
+      router.replace('/(auth)/role-selection'); 
     }
   };
 
-  // Placeholder function for social logins
   const handleComingSoon = () => {
     Alert.alert('Coming Soon', 'This feature will be available soon.');
   };
@@ -38,18 +42,18 @@ const LoginScreen = () => {
         <ArrowLeft size={24} color="#ffffff" />
       </TouchableOpacity>
       <View style={styles.content}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Log in to continue your journey</Text>
+        <Text style={styles.title}>Create Account</Text>
+        <Text style={styles.subtitle}>Join a community of wellness</Text>
         <Card style={styles.card}>
-          <View style={styles.socialContainer}>
+           <View style={styles.socialContainer}>
             <TouchableOpacity style={styles.socialButton} onPress={handleComingSoon}>
               <GoogleIcon />
-              <Text style={styles.socialButtonText}>Continue with Google</Text>
+              <Text style={styles.socialButtonText}>Sign up with Google</Text>
             </TouchableOpacity>
             {Platform.OS === 'ios' && (
               <TouchableOpacity style={[styles.socialButton, styles.appleButton]} onPress={handleComingSoon}>
                 <AppleIcon color="white" />
-                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Continue with Apple</Text>
+                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Sign up with Apple</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -57,6 +61,16 @@ const LoginScreen = () => {
             <View style={styles.divider} />
             <Text style={styles.dividerText}>OR</Text>
             <View style={styles.divider} />
+          </View>
+          <View style={styles.inputContainer}>
+            <User size={20} color="#6b7280" style={styles.icon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor="#888"
+              value={name}
+              onChangeText={setName}
+            />
           </View>
           <View style={styles.inputContainer}>
             <Mail size={20} color="#6b7280" style={styles.icon} />
@@ -82,18 +96,18 @@ const LoginScreen = () => {
             />
           </View>
           <Button
-            title={loading ? 'Logging In...' : 'Log In'}
-            onPress={handleLogin}
+            title={loading ? 'Creating Account...' : 'Create Account'}
+            onPress={handleSignup}
             disabled={loading}
             style={styles.button}
           >
-             {loading && <ActivityIndicator color="#ffffff" style={{ marginRight: 8 }} />}
+            {loading && <ActivityIndicator color="#ffffff" style={{ marginRight: 8 }} />}
           </Button>
         </Card>
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account? </Text>
-          <Link href="/(auth)/signup" asChild>
-            <Text style={styles.link}>Sign Up</Text>
+          <Text style={styles.footerText}>Already have an account? </Text>
+          <Link href="/(auth)/login" asChild>
+            <Text style={styles.link}>Log In</Text>
           </Link>
         </View>
       </View>
@@ -125,4 +139,4 @@ const styles = StyleSheet.create({
     link: { color: '#fbbf24', fontWeight: 'bold' },
 });
 
-export default LoginScreen;
+export default SignupScreen;
