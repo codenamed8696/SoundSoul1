@@ -6,10 +6,23 @@ import { Counselor, UserProfile, Appointment } from '@/types';
 import { BookingModal } from './BookingModal';
 import { useData } from '@/context/DataContext';
 
-export function CounselorCard({ counselor }: { counselor: Counselor }) {
+interface CounselorCardProps {
+  counselor: Counselor;
+  onBookingComplete: () => void;
+}
+
+export function CounselorCard({ counselor, onBookingComplete }: CounselorCardProps) {
   const [modalVisible, setModalVisible] = useState(false);
   const { createAppointment } = useData();
   const profile = counselor.profiles as UserProfile;
+
+  const handleConfirmBooking = async (details: Partial<Appointment>): Promise<boolean> => {
+      const success = await createAppointment(details);
+      if (success) {
+        onBookingComplete();
+      }
+      return success;
+  }
 
   return (
     <>
@@ -33,7 +46,7 @@ export function CounselorCard({ counselor }: { counselor: Counselor }) {
         counselor={counselor}
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onConfirmBooking={createAppointment}
+        onConfirmBooking={handleConfirmBooking}
       />
     </>
   );

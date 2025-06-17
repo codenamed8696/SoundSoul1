@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, Clock, Video, PlusCircle, Lock } from 'lucide-react-native';
 import { useData } from '@/context/DataContext';
@@ -10,75 +10,14 @@ import { Button } from '@/components/common/Button';
 import { Card } from '@/components/common/Card';
 import { router } from 'expo-router';
 import { format } from 'date-fns';
+import { supabase } from '@/context/supabaseClient'; // Import supabase client directly
 
-type ActiveTab = 'upcoming' | 'book';
-
-const AnonymousPrompt = () => { /* This component is correct and does not need changes */ };
-
-export default function AppointmentsScreen() {
-  const { user } = useAuth();
-  const { appointments, counselors, loading } = useData();
-  const [activeTab, setActiveTab] = useState<ActiveTab>('upcoming');
-
-  const isLoadingAppointments = loading['appointments'];
-  const isLoadingCounselors = loading['counselors'];
-
-  if (user?.is_anonymous) {
-    return <AnonymousPrompt />;
-  }
-  
-  const renderUpcomingSessions = () => {
-    // **THE DEFINITIVE FIX**
-    // This check guarantees the app will not crash by ensuring `appointments` is an array.
-    if (isLoadingAppointments || !Array.isArray(appointments)) {
-      return <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#4f46e5" /></View>;
-    }
-
-    const upcomingAppointments = appointments
-      .filter(a => a && a.status === 'confirmed' && new Date(a.appointment_time) >= new Date())
-      .sort((a, b) => new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime());
-
-    if (upcomingAppointments.length === 0) {
-      return (
-        <View style={styles.emptyStateContainer}>
-          <Calendar size={48} color="#9ca3af" />
-          <Text style={styles.emptyStateTitle}>No Upcoming Sessions</Text>
-          <Text style={styles.emptyStateSubtitle}>You can book a new session with one of our counselors.</Text>
-        </View>
-      );
-    }
-    return (
-      <FlatList
-        data={upcomingAppointments}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => <AppointmentCard appointment={item} />}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-      />
-    );
-  };
-
-  const renderBookSession = () => {
-    if (isLoadingCounselors || !Array.isArray(counselors)) {
-        return <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#4f46e5" /></View>;
-    }
-    return (
-      <FlatList
-        data={counselors}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => <CounselorCard counselor={item} onBook={() => {}} />}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-      />
-    );
-  };
-
-  const AppointmentCard = ({ appointment }: { appointment: Appointment }) => {
+// This component is now defined OUTSIDE the main component to prevent re-creation issues.
+const AppointmentCard = ({ appointment }: { appointment: Appointment }) => {
     const counselorProfile = appointment.counselors?.profiles;
     if (!counselorProfile) {
         return <View style={styles.appointmentCard}><ActivityIndicator /></View>;
     }
-
     return (
       <View style={styles.appointmentCard}>
         <Text style={styles.appointmentDate}>{format(new Date(appointment.appointment_time), "EEEE, MMMM d, yyyy")}</Text>
@@ -99,6 +38,120 @@ export default function AppointmentsScreen() {
         </Pressable>
       </View>
     );
+};
+
+const AnonymousPrompt = () => {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.promptContainer}>
+            <Card style={styles.promptCard}>
+                <View style={styles.promptIconContainer}>
+                    <Lock size={32} color="#4f46e5" />
+                </View>
+                <Text style={styles.promptTitle}>Book & Manage Sessions</Text>
+                <Text style={styles.promptText}>
+                To schedule therapy sessions and view your appointment history, please create a free account or link an employer code. Your privacy is always our priority.
+                </Text>
+                <Button 
+                    title="Create a Free Account" 
+                    onPress={() => router.push('/(auth)/signup')}
+                    style={{marginBottom: 16}} 
+                />
+                <Button 
+                    title="Add Employer Code" 
+                    onPress={() => router.push('/(tabs)/profile')}
+                    variant="ghost"
+                />
+            </Card>
+        </View>
+      </SafeAreaView>
+    );
+};
+
+export default function AppointmentsScreen() {
+  const { user } = useAuth();
+  const { counselors, loading: dataContextLoading, fetchCounselors, bookAppointment } = useData();
+  const [activeTab, setActiveTab] = useState<ActiveTab>('upcoming');
+  
+  // --- DEFINITIVE FIX: State is now managed locally within this screen ---
+  const [localAppointments, setLocalAppointments] = useState<Appointment[]>([]);
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(true);
+
+  // This function now lives inside the component and is responsible for its own data.
+  const getAppointments = useCallback(async () => {
+    if (!user) return;
+    setIsLoadingAppointments(true);
+    try {
+        const { data, error } = await supabase
+            .from('appointments')
+            .select(`*, counselors (*, profiles (*))`)
+            .eq('user_id', user.id)
+            .order('appointment_time', { ascending: true });
+
+        if (error) throw error;
+        setLocalAppointments(data || []);
+    } catch (error: any) {
+        Alert.alert("Error", "Could not fetch your appointments.");
+    } finally {
+        setIsLoadingAppointments(false);
+    }
+  }, [user]);
+
+  // This useEffect fetches data when the component loads or the user changes.
+  useEffect(() => {
+    if(user) {
+        getAppointments();
+        if (typeof fetchCounselors === 'function') {
+          fetchCounselors();
+        }
+    }
+  }, [user, getAppointments, fetchCounselors]);
+
+  const renderUpcomingSessions = () => {
+    if (isLoadingAppointments) {
+      return <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#4f46e5" /></View>;
+    }
+
+    const upcomingAppointments = localAppointments
+      .filter(a => a && new Date(a.appointment_time) >= new Date());
+
+    if (upcomingAppointments.length === 0) {
+      return (
+        <View style={styles.emptyStateContainer}>
+          <Calendar size={48} color="#9ca3af" />
+          <Text style={styles.emptyStateTitle}>No Upcoming Sessions</Text>
+          <Text style={styles.emptyStateSubtitle}>Book a new session to see it here.</Text>
+        </View>
+      );
+    }
+    return (
+      <FlatList
+        data={upcomingAppointments}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => <AppointmentCard appointment={item} />}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+      />
+    );
+  };
+
+  const renderBookSession = () => {
+    if (dataContextLoading['counselors']) {
+        return <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#4f46e5" /></View>;
+    }
+    return (
+      <FlatList
+        data={counselors}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => <CounselorCard counselor={item} onBookingComplete={getAppointments} />}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+      />
+    );
+  };
+  
+  if (user?.is_anonymous) {
+    return <AnonymousPrompt />;
   }
 
   return (
