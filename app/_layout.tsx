@@ -1,71 +1,60 @@
 import React, { useEffect } from 'react';
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { DataProvider } from '@/context/DataContext';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { Slot, useRouter } from 'expo-router';
+import { AuthProvider, useAuth } from '../context/AuthContext';
+import { DataProvider, useData } from '../context/DataContext';
+import { ActivityIndicator, View } from 'react-native';
+import { Profile } from '../types';
 
-function RootLayoutNav() {
-  const { user, profile, loading } = useAuth();
+const LayoutController = () => {
+  const { profile, loading: authLoading } = useAuth();
+  const { dataLoading } = useData();
   const router = useRouter();
-  const segments = useSegments();
+
+  const isLoading = authLoading || dataLoading;
 
   useEffect(() => {
-    // Wait until the initial loading is complete before doing any navigation.
-    if (loading) {
-      return;
-    }
+    if (isLoading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-
-    // Condition 1: If the user is not signed in and they are NOT in the auth group,
-    // redirect them to the welcome screen.
-    if (!user && !inAuthGroup) {
+    if (profile?.role) {
+      switch ((profile as Profile).role) {
+        case 'employer':
+          // Redirect employer to their dashboard (assuming it exists)
+          router.replace('/(employer)/dashboard');
+          break;
+        case 'counselor':
+          // ** THIS IS THE FIX **
+          // We now redirect to the specific dashboard screen
+          router.replace('/(counselor)/dashboard');
+          break;
+        case 'user':
+        default:
+          // Redirect user to the main tabs
+          router.replace('/(tabs)');
+          break;
+      }
+    } else {
+      // If there's no profile (and thus no user), go to the auth flow.
       router.replace('/(auth)/welcome');
-    } 
-    // Condition 2: If the user IS signed in and has a profile, and they ARE in the auth group,
-    // redirect them to their correct home portal.
-    else if (user && profile && inAuthGroup) {
-      // Determine the home route based on the user's role from their profile.
-      const homeRoute =
-        profile.role === 'user' ? '/(tabs)' :
-        profile.role === 'counselor' ? '/(counselor)/dashboard' :
-        profile.role === 'employer' ? '/(employer)/dashboard' :
-        '/(auth)/welcome'; // Fallback to welcome screen if role is unknown
-      router.replace(homeRoute);
     }
-  }, [user, profile, loading, segments, router]); // This effect depends on all these values
+  }, [profile, isLoading]);
 
-  // While loading, show a full-screen spinner to prevent UI flashes.
-  if (loading) {
+  if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4f46e5" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
-  
-  // Once loading is complete, render the current route.
+
   return <Slot />;
-}
+};
 
 export default function RootLayout() {
   return (
     <AuthProvider>
       <DataProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-            <RootLayoutNav />
-        </GestureHandlerRootView>
+        <LayoutController />
       </DataProvider>
     </AuthProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc' // Match your app's background color
-  }
-});

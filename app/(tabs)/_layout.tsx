@@ -1,27 +1,27 @@
+import React from 'react';
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
-import { Home, MessageCircle, Calendar, User, Heart } from 'lucide-react-native';
+import { Home, Heart, MessageSquare, Calendar, User } from 'lucide-react-native';
 
-export default function TabLayout() {
-  // All redirect and loading logic has been removed from this file.
-  // It is now only responsible for rendering the tabs for a standard user.
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#6366f1',
-        tabBarInactiveTintColor: '#9ca3af',
+        headerShown: false, // <-- THIS LINE HIDES ALL HEADERS IN THE TABS
+        tabBarShowLabel: false,
+        tabBarActiveTintColor: '#4F46E5',
+        tabBarInactiveTintColor: '#6B7280',
         tabBarStyle: {
-          backgroundColor: '#ffffff',
-          borderTopWidth: 1,
-          borderTopColor: '#e5e7eb',
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 0,
+          elevation: 5,
         },
-      }}>
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ size, color }) => (<Home size={size} color={color} />) }} />
-      <Tabs.Screen name="wellness" options={{ title: 'Wellness', tabBarIcon: ({ size, color }) => (<Heart size={size} color={color} />) }} />
-      <Tabs.Screen name="chat" options={{ title: 'AI Chat', tabBarIcon: ({ size, color }) => (<MessageCircle size={size} color={color} />) }} />
-      <Tabs.Screen name="appointments" options={{ title: 'Therapy', tabBarIcon: ({ size, color }) => (<Calendar size={size} color={color} />) }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: ({ size, color }) => (<User size={size} color={color} />) }} />
+      }}
+    >
+      <Tabs.Screen name="index" options={{ tabBarIcon: ({ color }) => <Home color={color} /> }} />
+      <Tabs.Screen name="wellness" options={{ tabBarIcon: ({ color }) => <Heart color={color} /> }} />
+      <Tabs.Screen name="chat" options={{ tabBarIcon: ({ color }) => <MessageSquare color={color} /> }} />
+      <Tabs.Screen name="appointments" options={{ title: 'Appointments', tabBarIcon: ({ color }) => <Calendar color={color} /> }} />
+      <Tabs.Screen name="profile" options={{ tabBarIcon: ({ color }) => <User color={color} /> }} />
     </Tabs>
   );
 }

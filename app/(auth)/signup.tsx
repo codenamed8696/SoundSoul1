@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '../../context/AuthContext'; // Corrected import path
 import { GradientBackground } from '@/components/common/GradientBackground';
 import { Mail, Lock, User, ArrowLeft } from 'lucide-react-native';
 import { Card } from '@/components/common/Card';
@@ -25,93 +25,72 @@ const SignupScreen = () => {
     if (error) {
       Alert.alert('Registration Error', error.message);
     } else {
-      // ** CHANGE HERE: Navigate to role selection instead of login **
-      Alert.alert('Account Created!', 'Please verify your email, then choose your role to get started.');
-      router.replace('/(auth)/role-selection'); 
+      // ** CHANGE HERE: The user is now automatically redirected by the root layout. **
+      // We no longer need to navigate manually from here.
+      Alert.alert('Account Created!', 'Please check your email to verify your account. Redirecting you now...');
     }
   };
 
   const handleComingSoon = () => {
-    Alert.alert('Coming Soon', 'This feature will be available soon.');
+    Alert.alert('Coming Soon', 'This feature is not yet implemented.');
   };
 
   return (
-    <View style={styles.container}>
-      <GradientBackground colors={['#667eea', '#764ba2', '#f093fb']} />
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <ArrowLeft size={24} color="#ffffff" />
-      </TouchableOpacity>
-      <View style={styles.content}>
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Join a community of wellness</Text>
-        <Card style={styles.card}>
-           <View style={styles.socialContainer}>
-            <TouchableOpacity style={styles.socialButton} onPress={handleComingSoon}>
-              <GoogleIcon />
-              <Text style={styles.socialButtonText}>Sign up with Google</Text>
-            </TouchableOpacity>
-            {Platform.OS === 'ios' && (
-              <TouchableOpacity style={[styles.socialButton, styles.appleButton]} onPress={handleComingSoon}>
-                <AppleIcon color="white" />
-                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Sign up with Apple</Text>
+    <GradientBackground>
+      <View style={styles.container}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ArrowLeft color="#fff" size={24} />
+        </TouchableOpacity>
+        <View style={styles.content}>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Start your journey with SoundSoul today.</Text>
+          <Card style={styles.card}>
+            {/* Social Logins */}
+            <View style={styles.socialContainer}>
+              <TouchableOpacity style={styles.socialButton} onPress={handleComingSoon}>
+                <GoogleIcon size={22} />
+                <Text style={styles.socialButtonText}>Continue with Google</Text>
               </TouchableOpacity>
-            )}
+              <TouchableOpacity style={[styles.socialButton, styles.appleButton]} onPress={handleComingSoon}>
+                <AppleIcon size={22} />
+                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Continue with Apple</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.divider} />
+            </View>
+
+            {/* Form Inputs */}
+            <View style={styles.inputContainer}>
+                <User color="#9CA3AF" size={20} />
+                <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor="#9CA3AF" value={name} onChangeText={setName} />
+            </View>
+            <View style={styles.inputContainer}>
+                <Mail color="#9CA3AF" size={20} />
+                <TextInput style={styles.input} placeholder="Email address" placeholderTextColor="#9CA3AF" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+            </View>
+            <View style={styles.inputContainer}>
+                <Lock color="#9CA3AF" size={20} />
+                <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#9CA3AF" value={password} onChangeText={setPassword} secureTextEntry />
+            </View>
+            
+            <Button onPress={handleSignup} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : 'Create Account'}
+            </Button>
+          </Card>
+          <View style={styles.loginContainer}>
+            <Text style={styles.loginText}>Already have an account?</Text>
+            <Link href="/(auth)/login" asChild>
+              <TouchableOpacity>
+                <Text style={styles.loginLink}> Sign In</Text>
+              </TouchableOpacity>
+            </Link>
           </View>
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.divider} />
-          </View>
-          <View style={styles.inputContainer}>
-            <User size={20} color="#6b7280" style={styles.icon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name"
-              placeholderTextColor="#888"
-              value={name}
-              onChangeText={setName}
-            />
-          </View>
-          <View style={styles.inputContainer}>
-            <Mail size={20} color="#6b7280" style={styles.icon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#888"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-          <View style={styles.inputContainer}>
-            <Lock size={20} color="#6b7280" style={styles.icon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#888"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-          </View>
-          <Button
-            title={loading ? 'Creating Account...' : 'Create Account'}
-            onPress={handleSignup}
-            disabled={loading}
-            style={styles.button}
-          >
-            {loading && <ActivityIndicator color="#ffffff" style={{ marginRight: 8 }} />}
-          </Button>
-        </Card>
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
-          <Link href="/(auth)/login" asChild>
-            <Text style={styles.link}>Log In</Text>
-          </Link>
         </View>
       </View>
-    </View>
+    </GradientBackground>
   );
 };
 
@@ -131,12 +110,10 @@ const styles = StyleSheet.create({
     divider: { flex: 1, height: 1, backgroundColor: '#e5e7eb' },
     dividerText: { marginHorizontal: 12, color: '#6b7280' },
     inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, marginBottom: 16, paddingHorizontal: 12 },
-    icon: { marginRight: 8 },
-    input: { flex: 1, height: 50, color: '#111827', fontSize: 16 },
-    button: { marginTop: 8 },
-    footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
-    footerText: { color: '#e0e7ff' },
-    link: { color: '#fbbf24', fontWeight: 'bold' },
+    input: { flex: 1, paddingVertical: Platform.OS === 'ios' ? 14 : 10, paddingHorizontal: 8, color: '#111827', fontSize: 16 },
+    loginContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24 },
+    loginText: { color: '#e0e7ff' },
+    loginLink: { color: '#fff', fontWeight: 'bold' }
 });
 
 export default SignupScreen;

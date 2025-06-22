@@ -2,8 +2,8 @@ import { supabase } from './supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { Profile } from '../types';
+import { Alert } from 'react-native';
 
-// The context type no longer includes signInWithGoogle or signInWithApple
 interface AuthContextType {
   session: Session | null;
   user: User | null;
@@ -13,7 +13,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   signUp: (email, password, name) => Promise<{ error: any | null }>;
   signInAnonymously: () => Promise<{ error: any | null }>;
-  updateUserRole: (role: 'user' | 'counselor' | 'employer') => Promise<{ error: any | null }>;
+  updateUserRole: (role: 'user' | 'counselor' | 'employer') => Promise<{ error: any | null; }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,62 +28,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error, status } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`*`)
         .eq('id', currentUser.id)
         .single();
-
       if (error && status !== 406) {
         throw error;
       }
-      
       if (data) {
         setProfile(data as Profile);
       }
     } catch (error) {
-        console.error('Error fetching profile:', (error as Error).message);
+      Alert.alert('Error fetching profile', (error as Error).message);
     }
   }, []);
-  
+
+
   useEffect(() => {
-    const fetchSessionAndProfile = async () => {
-      setLoading(true);
-      const { data: { session }, error } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error("Error fetching session:", error.message);
+    setLoading(true);
+    const fetchInitialSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+            await getProfileForUser(session.user);
+        }
         setLoading(false);
-        return;
-      }
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        await getProfileForUser(session.user);
-      }
-      
-      setLoading(false);
     };
 
-    fetchSessionAndProfile();
+    fetchInitialSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        
         if (newSession?.user) {
-          setLoading(true);
-          await getProfileForUser(newSession.user);
-          setLoading(false);
+            await getProfileForUser(newSession.user);
         } else {
-          setProfile(null);
+            setProfile(null);
         }
       }
     );
 
     return () => {
-      subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
   }, [getProfileForUser]);
 
@@ -95,59 +82,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setProfile(null);
   };
 
   const signUp = async (email, password, name) => {
-    const { error } = await supabase.auth.signUp({ 
-      email, 
-      password, 
-      options: { 
-        data: { 
-          full_name: name 
-        } 
-      } 
-    });
-    return { error };
+    const { data: authData, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } });
+    if (error) return { error };
+    if (!authData.user) return { error: { message: "Signup failed." } };
+    const { error: profileError } = await supabase.from('profiles').insert({ id: authData.user.id, full_name: name, role: 'user' });
+    return { error: profileError };
   };
   
   const signInAnonymously = async () => {
     const { error } = await supabase.auth.signInAnonymously();
     return { error };
   };
-
-  const updateUserRole = async (role: 'user' | 'counselor' | 'employer') => {
-    if (!user) {
-      return { error: { message: "No user is currently signed in." } };
-    }
-    const { error } = await supabase
-      .from('profiles')
-      .update({ role: role })
-      .eq('id', user.id);
-    
-    if (!error) {
-      await getProfileForUser(user);
-    }
-
+  
+  const updateUserRole = async (role) => {
+    if (!user) return { error: { message: "No user signed in." } };
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', user.id);
+    if (!error) await getProfileForUser(user);
     return { error };
   };
   
-  // The context value now only includes the methods we are actually using.
-  const value = { 
-    session, 
-    user, 
-    profile, 
-    loading, 
-    signIn, 
-    signOut, 
-    signUp, 
-    signInAnonymously, 
-    updateUserRole 
-  };
+  const value = { session, user, profile, loading, signIn, signOut, signUp, signInAnonymously, updateUserRole };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }

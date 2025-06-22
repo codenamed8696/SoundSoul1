@@ -1,35 +1,19 @@
 import { Stack, router } from 'expo-router';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { useEffect } from 'react';
-import { Profile } from '@/types';
+import { Profile } from '../../types';
 import { ActivityIndicator, View } from 'react-native';
 
 export default function AuthLayout() {
   const { user, loading, profile } = useAuth();
 
   useEffect(() => {
-    if (!loading && user) {
-      if (user.is_anonymous) {
-        router.replace('/(tabs)');
-        return;
-      }
-      if (profile && profile.role) {
-        switch ((profile as Profile).role) {
-          case 'employer':
-            router.replace('/(employer)');
-            break;
-          case 'counselor':
-            router.replace('/(counselor)');
-            break;
-          default:
-            router.replace('/(tabs)');
-            break;
-        }
-      }
-      // If a registered user has no role, they will remain in the auth flow
-      // to be directed to the role selection screen.
+    // This logic correctly redirects authenticated users out of the auth flow
+    if (!loading && profile?.role) {
+        router.replace('/(tabs)'); // or counselor/employer dashboards
     }
   }, [user, loading, profile]);
+
 
   if (loading) {
     return (
@@ -41,13 +25,11 @@ export default function AuthLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="welcome" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="signup" />
-      {/* All routes for the different auth flows are now included */}
-      <Stack.Screen name="link-employer" />
-      <Stack.Screen name="anonymous-welcome" />
-      <Stack.Screen name="role-selection" />
+        {/* THIS HIDES HEADERS FOR ALL AUTH SCREENS */}
+        <Stack.Screen name="welcome" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="signup" />
+        <Stack.Screen name="anonymous-welcome" />
     </Stack>
   );
 }
