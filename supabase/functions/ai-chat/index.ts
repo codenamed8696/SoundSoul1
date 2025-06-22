@@ -1,9 +1,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+import { GoogleGenerativeAI } from 'npm:@google/generative-ai'
 import { corsHeaders } from '../_shared/cors.ts'
 
-// This is the main handler for the Edge Function
+const systemPrompt = `You are a friendly and supportive mental wellness assistant for an app called SoundSoul. You are not a licensed therapist. Your goal is to provide helpful, encouraging, and safe conversation. If a user expresses thoughts of self-harm, suicide, or crisis, you must immediately direct them to seek professional help and provide a helpline number. Do not give medical advice. Be empathetic and kind.`
+
 serve(async (req) => {
-  // This part is required for web clients to call the function
+  // This is required for web clients to call the function
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -11,60 +13,57 @@ serve(async (req) => {
   try {
     const { messages } = await req.json()
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
+
+    if (!GEMINI_API_KEY) {
+      throw new Error("Missing GEMINI_API_KEY environment variable.")
+    }
+    if (!messages || !Array.isArray(messages)) {
+      throw new Error("Invalid 'messages' payload.")
+    }
     
-    // The Gemini API requires a specific format. We'll transform our messages.
-    // The history should not include the latest user message, which goes into "contents".
-    const history = messages.slice(0, -1).map(msg => ({
+    // The Gemini API expects roles 'user' and 'model'
+    const contents = messages.map((msg: { role: string; content: string }) => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }],
-    }));
+      parts: [{ text: msg.content }]
+    }))
 
-    const latestUserMessage = messages[messages.length - 1]?.content;
-
-    // The body for the Gemini API call
-    const requestBody = {
-      contents: [
-        ...history,
-        {
-          role: 'user',
-          parts: [{ text: latestUserMessage }],
-        }
-      ],
-      // This is the system instruction that defines the AI's personality
-      systemInstruction: {
-        role: 'model',
-        parts: [{ text: `You are SoundSoul AI, a supportive and caring well-being companion. You are not a licensed therapist. Your goal is to offer general advice, provide a safe space for users to express their feelings, and suggest wellness techniques. If a user expresses signs of severe distress or crisis, you must gently guide them to seek professional help and provide a crisis hotline number. Do not give medical advice. Keep your responses concise, empathetic, and encouraging.` }]
-      },
-    };
-
-    // We use the stream=true parameter to get real-time responses
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?key=${GEMINI_API_KEY}`;
-    
-    // We use fetch to call the Gemini API
-    const res = await fetch(geminiUrl, {
+    // Use a direct fetch call to the non-streaming endpoint
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
+      body: JSON.stringify({
+        contents,
+        systemInstruction: {
+          role: 'system',
+          parts: [{ text: systemPrompt }]
+        }
+      })
+    })
 
     if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Gemini API error: ${res.statusText} - ${errorText}`);
+      const errorBody = await res.json()
+      throw new Error(errorBody.error.message || 'Failed to fetch response from Gemini API.')
     }
 
-    // Return the streaming response directly to the app
-    return new Response(res.body, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/event-stream; charset=utf-8',
-      },
-    });
+    const responseJson = await res.json()
 
+    // **THE CRITICAL FIX IS HERE**:
+    // We now correctly and safely extract the text from the complex response object.
+    const text = responseJson?.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't process that. Please try again."
+
+    // Return the extracted text in a simple, predictable JSON object.
+    return new Response(
+      JSON.stringify({ reply: text }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
+    )
   } catch (error) {
-    console.error(error);
+    console.error('CRITICAL ERROR in ai-chat function:', error)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
+      status: 500,
     })
   }
 })

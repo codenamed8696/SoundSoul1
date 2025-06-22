@@ -1,121 +1,145 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
-import { useData } from '../../context/DataContext';
-import { Send } from 'lucide-react-native';
-import { Message } from '../../types'; // Assuming Message type is in your types file
+import {
+  View,
+  TextInput,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  TouchableOpacity,
+  FlatList,
+  SafeAreaView,
+} from 'react-native';
+import { useData } from '@/context/DataContext';
+import CrisisModal from '@/components/common/CrisisModal';
 
-export const AIChat = () => {
-  const { sendAIMessage } = useData();
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const CRISIS_KEYWORDS = ['suicide', 'kill myself', 'end my life', 'self-harm', 'want to die'];
+
+const AIChat = () => {
   const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: "Hello! I'm your SoundSoul AI companion. How are you feeling today? Remember, I'm here to support you, but I'm not a replacement for a therapist."
-    }
+    { role: 'assistant', content: 'Hello! How can I help you today?' },
   ]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [crisisModalVisible, setCrisisModalVisible] = useState(false);
+
+  const { sendAIMessage } = useData();
   const flatListRef = useRef<FlatList>(null);
 
-  const handleSend = async () => {
-    if (input.trim().length === 0 || loading) return;
-
-    const userMessage: Message = { role: 'user', content: input };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInput('');
-    setLoading(true);
-
-    const stream = await sendAIMessage(newMessages);
-    if (!stream) {
-      setLoading(false);
-      setMessages(messages);
-      return;
-    }
-
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
-    let assistantResponse = '';
-
-    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-
-    const processStream = async () => {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-                setLoading(false);
-                break;
-            }
-
-            try {
-                const chunk = decoder.decode(value, { stream: false });
-                assistantResponse += chunk;
-                setMessages(prev => {
-                    const updatedMessages = [...prev];
-                    updatedMessages[updatedMessages.length - 1].content = assistantResponse;
-                    return updatedMessages;
-                });
-            } catch (error) {
-                console.error("Error decoding stream chunk:", error);
-            }
-        }
-    };
-    processStream();
-  };
-
-  const renderMessage = ({ item }: { item: Message }) => (
-    <View style={[styles.messageBubble, item.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-      <Text style={item.role === 'user' ? styles.userText : styles.aiText}>
-        {item.content}
-      </Text>
-    </View>
-  );
-
   useEffect(() => {
-    flatListRef.current?.scrollToEnd({ animated: true });
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages]);
 
+  const checkForCrisisKeywords = (text: string) => {
+    if (CRISIS_KEYWORDS.some(keyword => text.toLowerCase().includes(keyword))) {
+      setCrisisModalVisible(true);
+    }
+  };
+
+  const handleSend = async () => {
+    const trimmedInput = input.trim();
+    if (trimmedInput.length === 0 || isLoading) return;
+
+    const userMessage: Message = { role: 'user', content: trimmedInput };
+    const messageHistoryForAPI = [...messages, userMessage];
+    
+    setMessages(messageHistoryForAPI);
+    setInput('');
+    setIsLoading(true);
+    checkForCrisisKeywords(trimmedInput);
+
+    try {
+      // **THE CRITICAL CHANGE**: We now receive a simple 'reply' string.
+      const { conversationId: newConversationId, reply } = await sendAIMessage(
+        conversationId,
+        messageHistoryForAPI
+      );
+      
+      if (!conversationId) setConversationId(newConversationId);
+
+      if (reply) {
+        const assistantMessage: Message = { role: 'assistant', content: reply };
+        setMessages(prev => [...prev, assistantMessage]);
+      } else {
+          throw new Error("Received an empty reply from the server.");
+      }
+
+    } catch (error) {
+      console.error('Error in handleSend:', error);
+      const errorMessage: Message = { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
   return (
-    <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
         style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={100}
-    >
+      >
+        <CrisisModal visible={crisisModalVisible} onClose={() => setCrisisModalVisible(false)} />
+        
         <FlatList
-            ref={flatListRef}
-            data={messages}
-            renderItem={renderMessage}
-            keyExtractor={(_, index) => index.toString()}
-            contentContainerStyle={styles.listContent}
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(_, index) => index.toString()}
+          renderItem={({ item }) => (
+            <View style={[styles.messageBubble, item.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
+                <Text style={item.role === 'user' ? styles.userMessageText : styles.assistantMessageText}>{item.content}</Text>
+            </View>
+          )}
+          contentContainerStyle={styles.messageListContent}
+          style={styles.messageList}
         />
-        {loading && <ActivityIndicator style={styles.loadingIndicator} color="#4F46E5" />}
+        
         <View style={styles.inputContainer}>
-            <TextInput
-                style={styles.input}
-                value={input}
-                onChangeText={setInput}
-                placeholder="How can I help you today?"
-                placeholderTextColor="#9CA3AF"
-                multiline
-            />
-            <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={loading}>
-                <Send color="#fff" size={20} />
-            </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Type your message..."
+            editable={!isLoading}
+            multiline
+          />
+          <TouchableOpacity 
+            style={[styles.sendButton, (isLoading || input.trim().length === 0) && styles.disabledButton]} 
+            onPress={handleSend} 
+            disabled={isLoading || input.trim().length === 0}
+          >
+            {isLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.sendButtonText}>Send</Text>}
+          </TouchableOpacity>
         </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
-// Your original styles from AIChat.tsx
+// --- Styles ---
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
-    listContent: { padding: 10, paddingBottom: 20 },
-    messageBubble: { borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, marginVertical: 5, maxWidth: '80%' },
-    userBubble: { backgroundColor: '#4F46E5', alignSelf: 'flex-end' },
-    aiBubble: { backgroundColor: '#FFFFFF', alignSelf: 'flex-start', borderWidth: 1, borderColor: '#E5E7EB' },
-    userText: { color: '#FFFFFF', fontSize: 16 },
-    aiText: { color: '#1F2937', fontSize: 16 },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', padding: 10, borderTopWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#fff' },
-    input: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, marginRight: 10, fontSize: 16 },
-    sendButton: { backgroundColor: '#4F46E5', borderRadius: 25, padding: 12, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-    loadingIndicator: { marginVertical: 10, alignSelf: 'flex-start', marginLeft: 10 }
+  safeArea: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
+  messageList: { flex: 1, paddingHorizontal: 12, backgroundColor: '#f5f5f5' },
+  messageListContent: { paddingTop: 10, paddingBottom: 10 },
+  messageBubble: { borderRadius: 18, paddingVertical: 10, paddingHorizontal: 14, marginVertical: 4, maxWidth: '80%' },
+  userBubble: { backgroundColor: '#007AFF', alignSelf: 'flex-end', borderBottomRightRadius: 4 },
+  assistantBubble: { backgroundColor: '#E5E5EA', alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
+  userMessageText: { fontSize: 16, color: '#fff' },
+  assistantMessageText: { fontSize: 16, color: '#000' },
+  inputContainer: { flexDirection: 'row', padding: 10, borderTopWidth: 1, borderColor: '#D1D1D6', backgroundColor: '#f5f5f5', alignItems: 'center' },
+  input: { flex: 1, borderColor: '#D1D1D6', borderWidth: 1, borderRadius: 20, paddingHorizontal: 15, paddingTop: Platform.OS === 'ios' ? 10 : 8, paddingBottom: Platform.OS === 'ios' ? 10 : 8, marginRight: 10, backgroundColor: '#fff', fontSize: 16, maxHeight: 120 },
+  sendButton: { backgroundColor: '#007AFF', borderRadius: 20, paddingHorizontal: 20, paddingVertical: 10, justifyContent: 'center', alignItems: 'center', minWidth: 60 },
+  sendButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  disabledButton: { backgroundColor: '#A9A9A9' }
 });
+
+export default AIChat;
