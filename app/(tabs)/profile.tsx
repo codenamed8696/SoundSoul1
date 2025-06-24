@@ -55,7 +55,7 @@ export default function ProfileScreen() {
       setInsights(fetchedInsights);
     }
     fetchInsights();
-  }, [getUserInsights]);
+  }, []);
 
   const handleUpdateProfile = async () => {
     const success = await updateUserProfile({ full_name: profileForm.name });

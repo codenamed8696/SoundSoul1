@@ -14,14 +14,70 @@ export interface Organization {
   industry: string;
 }
 
-export interface GeneratedReport { /* Your original definition */ }
-export interface CompanyAnalytics { /* Your original definition */ }
-export interface UserInsights { /* Your original definition */ }
-export interface CounselorDashboardStats { /* Your original definition */ }
-export interface RecentActivity { /* Your original definition */ }
-export interface ClientDetails { /* Your original definition */ }
-export interface WellnessResource { /* Your original definition */ }
-export interface AIChat { /* Your original definition */ }
+export interface GeneratedReport { 
+  id: string;
+  title: string;
+  content: string;
+  generated_at: string;
+  user_id: string;
+}
+
+export interface CompanyAnalytics { 
+  totalUsers: number;
+  activeUsers: number;
+  totalSessions: number;
+  averageSessionDuration: number;
+  userSatisfaction: number;
+}
+
+export interface UserInsights { 
+  mood_average: number;
+  sessions_completed: number;
+  streak: number;
+}
+
+export interface CounselorDashboardStats { 
+  totalAppointments: number;
+  completedAppointments: number;
+  pendingAppointments: number;
+  totalClients: number;
+  averageRating: number;
+  monthlyRevenue: number;
+}
+
+export interface RecentActivity { 
+  id: string;
+  type: string;
+  description: string;
+  timestamp: string;
+  user_id: string;
+}
+
+export interface ClientDetails { 
+  id: string;
+  name: string;
+  email: string;
+  last_session: string;
+  total_sessions: number;
+  risk_level: 'low' | 'medium' | 'high';
+}
+
+export interface WellnessResource { 
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  url: string;
+  created_at: string;
+}
+
+export interface AIChat { 
+  id: string;
+  user_id: string;
+  message: string;
+  response: string;
+  timestamp: string;
+}
 
 export type MessageSenderType = 'client' | 'counselor' | 'system';
 

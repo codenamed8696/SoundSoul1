@@ -15,14 +15,14 @@ export default function HomeScreen() {
   const [insights, setInsights] = useState<any>(null);
 
   const upcomingAppointments = appointments.filter(apt => 
-    new Date(apt.scheduledDate) > new Date() && apt.status !== 'cancelled'
+    new Date(apt.appointment_time) > new Date() && apt.status !== 'cancelled'
   ).slice(0, 2);
 
   useEffect(() => {
     if (user) {
-      getUserInsights(user.id).then(setInsights);
+      getUserInsights().then(setInsights);
     }
-  }, [user, moodEntries]);
+  }, [user, getUserInsights]);
 
   const handleQuickAction = (action: string) => {
     switch (action) {
@@ -45,7 +45,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>
-              {user?.isAnonymous ? 'Welcome back' : `Hello, ${user?.name || 'there'}`}
+              Hello, there
             </Text>
             <Text style={styles.subtitle}>How are you feeling today?</Text>
           </View>
@@ -98,7 +98,7 @@ export default function HomeScreen() {
               <View style={styles.insightItem}>
                 <TrendingUp size={20} color="#6366f1" />
                 <Text style={styles.insightValue}>
-                  {insights?.moodAverage?.toFixed(1) || '3.0'}
+                  {insights?.mood_average?.toFixed(1) || '3.0'}
                 </Text>
                 <Text style={styles.insightLabel}>Mood Average</Text>
               </View>
@@ -106,7 +106,7 @@ export default function HomeScreen() {
               <View style={styles.insightItem}>
                 <Calendar size={20} color="#10b981" />
                 <Text style={styles.insightValue}>
-                  {insights?.streakDays || 0}
+                  {insights?.streak || 0}
                 </Text>
                 <Text style={styles.insightLabel}>Day Streak</Text>
               </View>
@@ -114,7 +114,7 @@ export default function HomeScreen() {
               <View style={styles.insightItem}>
                 <Heart size={20} color="#ec4899" />
                 <Text style={styles.insightValue}>
-                  {insights?.totalSessions || 0}
+                  {insights?.sessions_completed || 0}
                 </Text>
                 <Text style={styles.insightLabel}>Sessions</Text>
               </View>
@@ -122,12 +122,11 @@ export default function HomeScreen() {
             
             <View style={styles.trendContainer}>
               <Text style={styles.trendText}>
-                Your mood is {insights?.moodTrend || 'stable'}
+                Your mood is stable
               </Text>
               <View style={[
                 styles.trendIndicator,
-                { backgroundColor: insights?.moodTrend === 'improving' ? '#10b981' : 
-                                 insights?.moodTrend === 'declining' ? '#ef4444' : '#f59e0b' }
+                { backgroundColor: '#f59e0b' }
               ]} />
             </View>
           </Card>
@@ -142,17 +141,17 @@ export default function HomeScreen() {
                 <View style={styles.appointmentHeader}>
                   <Calendar size={20} color="#6366f1" />
                   <Text style={styles.appointmentDate}>
-                    {new Date(appointment.scheduledDate).toLocaleDateString()}
+                    {new Date(appointment.appointment_time).toLocaleDateString()}
                   </Text>
                   <Text style={styles.appointmentTime}>
-                    {new Date(appointment.scheduledDate).toLocaleTimeString([], {
+                    {new Date(appointment.appointment_time).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit'
                     })}
                   </Text>
                 </View>
                 <Text style={styles.appointmentType}>
-                  {appointment.type} session • {appointment.duration} minutes
+                  {appointment.type} session
                 </Text>
               </Card>
             ))}
@@ -169,19 +168,6 @@ export default function HomeScreen() {
                   <Plus size={16} color="#6366f1" />
                   <Text style={styles.recommendationText}>{recommendation}</Text>
                 </View>
-              ))}
-            </Card>
-          </View>
-        )}
-
-        {/* Company Benefits */}
-        {user?.companyConnection && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Benefits</Text>
-            <Card style={styles.benefitsCard}>
-              <Text style={styles.benefitsTitle}>Company Wellness Program</Text>
-              {user.companyConnection.benefits.map((benefit, index) => (
-                <Text key={index} style={styles.benefitItem}>• {benefit}</Text>
               ))}
             </Card>
           </View>
@@ -351,22 +337,6 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginLeft: 12,
     flex: 1,
-  },
-  benefitsCard: {
-    padding: 20,
-    backgroundColor: '#f0f9ff',
-  },
-  benefitsTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  benefitItem: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#374151',
-    marginBottom: 4,
   },
   bottomSpacing: {
     height: 20,

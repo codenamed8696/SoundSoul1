@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+//
+// NAME: context/DataContext.tsx
+//
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { useAuth } from './AuthContext';
 import {
@@ -6,278 +9,523 @@ import {
   MoodEntry, Conversation, Message as CounselorMessage, AIChat as DeprecatedAIChat, WellnessInsights, CompanyAnalytics,
   CounselorDashboardStats, RecentActivity, ClientDetails, GeneratedReport, WellnessResource
 } from '../types';
-import { Alert } from 'react-native';
 
-// Type for the AI Chat Messages
-interface AIMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-// Your original DataContextType with the new, non-streaming AI function signature
+// Define the shape of the data and functions the context will provide
 interface DataContextType {
   dataLoading: boolean;
   loading: Record<string, boolean>;
-  moodEntries: MoodEntry[];
   appointments: Appointment[];
   counselors: Counselor[];
-  aiChats: DeprecatedAIChat[];
+  clients: UserProfile[];
+  moodEntries: MoodEntry[];
   wellnessInsights: WellnessInsights | null;
   wellnessResources: WellnessResource[];
-  clients: UserProfile[];
-  clientDetails: ClientDetails[];
-  counselor: Counselor | null;
-  counselorStats: CounselorDashboardStats | null;
-  recentActivity: RecentActivity[];
+  organizations: Organization[];
   conversations: Conversation[];
-  messages: CounselorMessage[];
-  organization: Organization | null;
   companyAnalytics: CompanyAnalytics | null;
-  recentReports: GeneratedReport[];
-  
-  // All of your original functions are preserved
-  fetchMoodEntries: (timeframe?: 'day' | 'week' | 'month') => Promise<void>;
+  counselorDashboardStats: CounselorDashboardStats | null;
+  recentActivity: RecentActivity[];
+  clientDetails: ClientDetails[];
+  generatedReports: GeneratedReport[];
+
+  // All functions must be defined here
+  bookAppointment: (counselorId: number, appointmentTime: Date) => Promise<boolean>;
+  sendAIMessage: (currentMessages: any[]) => Promise<{ reply: string }>;
   fetchAppointments: () => Promise<void>;
   fetchCounselors: () => Promise<void>;
-  createAppointment: (appointmentData: Partial<Appointment>) => Promise<{ data?: any; error?: any; }>;
-  addMoodEntry: (mood: number, notes?: string) => Promise<boolean>;
-  bookAppointment: (counselorId: number) => Promise<boolean>;
-  updateAppointment: (appointmentId: number, updates: any) => Promise<boolean>;
+  fetchClientsForCounselor: (counselorId: string | undefined) => Promise<void>;
+  getCounselorDashboardStats: (counselorId: string | undefined) => Promise<void>;
   getUserInsights: () => Promise<void>;
-  getWellnessResources: () => Promise<void>;
-  fetchClientDetails: (clientId: string) => Promise<void>;
-  fetchClientsForCounselor: () => Promise<void>;
-  getCounselorDashboardStats: () => Promise<void>;
-  getRecentActivity: () => Promise<void>;
-  fetchConversations: (userId: string) => Promise<void>;
-  fetchMessages: (conversationId: string) => Promise<void>;
-  sendMessage: (conversationId: string, messageText: string) => Promise<void>;
-  updateCounselorDetails: (details: Partial<Counselor>) => Promise<boolean>;
-  updateUserProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
-  fetchCounselorDetails: () => Promise<void>;
-  fetchOrganization: () => Promise<void>;
-  fetchRecentReports: () => Promise<void>;
-  getCompanyAnalytics: () => Promise<void>;
-
-  // --- NEW AND CORRECTED AI CHAT FUNCTIONS ---
-  sendAIMessage: (conversationId: string | null, messages: AIMessage[]) => Promise<{ conversationId: string; reply: string | null }>;
-  fetchAIMessages: (conversationId: string) => Promise<AIMessage[]>;
+  fetchMoodEntries: () => Promise<void>;
+  addMoodEntry: (moodScore: number, notes?: string) => Promise<boolean>;
+  fetchWellnessResources: () => Promise<void>;
+  fetchOrganizations: () => Promise<void>;
+  fetchConversations: () => Promise<void>;
+  fetchCompanyAnalytics: () => Promise<void>;
+  fetchRecentActivity: () => Promise<void>;
+  fetchClientDetails: () => Promise<void>;
+  fetchGeneratedReports: () => Promise<void>;
 }
 
-export const DataContext = createContext<DataContextType | undefined>(undefined);
+const DataContext = createContext<DataContextType | undefined>(undefined);
 
-export const DataProvider = ({ children }: { children: ReactNode }) => {
-    const { user, profile, session, loading: authLoading } = useAuth(); // Added session for auth token
-    // All of your original state variables are preserved
+export function DataProvider({ children }: { children: ReactNode }) {
+    const { user, profile } = useAuth();
     const [dataLoading, setDataLoading] = useState(true);
     const [loading, setLoading] = useState<Record<string, boolean>>({});
-    const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
+    
+    // Initialize all array states to prevent '... of undefined' errors
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [counselors, setCounselors] = useState<Counselor[]>([]);
-    const [aiChats, setAIChats] = useState<DeprecatedAIChat[]>([]);
+    const [clients, setClients] = useState<UserProfile[]>([]);
+    const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
     const [wellnessInsights, setWellnessInsights] = useState<WellnessInsights | null>(null);
     const [wellnessResources, setWellnessResources] = useState<WellnessResource[]>([]);
-    const [clients, setClients] = useState<UserProfile[]>([]);
-    const [clientDetails, setClientDetails] = useState<ClientDetails[]>([]);
-    const [counselor, setCounselor] = useState<Counselor | null>(null);
-    const [counselorStats, setCounselorStats] = useState<CounselorDashboardStats | null>(null);
-    const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [messages, setMessages] = useState<CounselorMessage[]>([]);
-    const [organization, setOrganization] = useState<Organization | null>(null);
     const [companyAnalytics, setCompanyAnalytics] = useState<CompanyAnalytics | null>(null);
-    const [recentReports, setRecentReports] = useState<GeneratedReport[]>([]);
+    const [counselorDashboardStats, setCounselorDashboardStats] = useState<CounselorDashboardStats | null>(null);
+    const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+    const [clientDetails, setClientDetails] = useState<ClientDetails[]>([]);
+    const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>([]);
 
-    // --- ALL OF YOUR ORIGINAL, WORKING FUNCTIONS ARE PRESERVED HERE ---
+    // The stable, non-streaming AI Chat function
+    const sendAIMessage = useCallback(async (currentMessages: any[]) => {
+        setLoading(prev => ({ ...prev, aiChat: true }));
+        try {
+          const { data, error } = await supabase.functions.invoke('ai-chat', {
+            body: { messages: currentMessages },
+          });
+    
+          if (error) { throw error; }
+          if (typeof data?.reply !== 'string') {
+            throw new TypeError('Received an invalid response from the server.');
+          }
+          return { reply: data.reply };
+    
+        } catch (err) {
+          console.error('Error in sendAIMessage:', err);
+          throw err;
+        } finally {
+            setLoading(prev => ({ ...prev, aiChat: false }));
+        }
+    }, []); // Empty dependency array means this function is created only once
+
+    // All data-fetching functions are wrapped in useCallback to stabilize them.
+    // Their dependencies are primitive values from `user` and `profile`.
     const fetchAppointments = useCallback(async () => {
-        if (!user) return;
+        if (!user?.id || !profile?.id) return;
         setLoading(prev => ({...prev, appointments: true}));
-        const {data, error} = await supabase
-            .from('appointments')
-            .select(`*, counselor:counselors(id, profile:profiles(full_name, avatar_url))`)
-            .eq('user_id', user.id);
-        if (error) Alert.alert('Error', 'Failed to fetch appointments');
-        else setAppointments(data as any);
-        setLoading(prev => ({...prev, appointments: false}));
-    }, [user]);
+        try {
+            let query = supabase.from('appointments').select(`*, counselors(*, profiles(*))`);
+            if (profile.role === 'user') {
+                query = query.eq('user_id', user.id);
+            } else if (profile.role === 'counselor') {
+                // FIXED: First get the counselor's numeric ID from the counselors table
+                const { data: counselorData } = await supabase
+                    .from('counselors')
+                    .select('id')
+                    .eq('profile_id', profile.id)
+                    .single();
+                
+                if (counselorData) {
+                    // Now use the correct numeric ID to query appointments
+                    query = query.eq('counselor_id', counselorData.id);
+                }
+            }
+            const { data, error } = await query;
+            if (error) throw error;
+            setAppointments(data || []);
+        } catch (error) {
+            console.error("Error fetching appointments:", error);
+            setAppointments([]);
+        } finally {
+            setLoading(prev => ({...prev, appointments: false}));
+        }
+    }, [user?.id, profile?.id, profile?.role]);
 
     const fetchCounselors = useCallback(async () => {
         setLoading(prev => ({...prev, counselors: true}));
-        const {data, error} = await supabase
-            .from('counselors')
-            .select(`id, specialties, profile:profiles(full_name, avatar_url)`);
-        if (error) Alert.alert('Error', 'Failed to fetch counselors');
-        else setCounselors(data as any);
-        setLoading(prev => ({...prev, counselors: false}));
+        try {
+            const { data, error } = await supabase
+                .from('counselors')
+                .select('*, profiles(*)');
+            if (error) throw error;
+            setCounselors(data || []);
+        } catch (error) {
+            console.error("Error fetching counselors:", error);
+            setCounselors([]);
+        } finally {
+            setLoading(prev => ({...prev, counselors: false}));
+        }
     }, []);
 
-    const addMoodEntry = async (mood: number, notes?: string) => {
-        if (!user) return false;
-        const { status } = await supabase.from('mood_entries').insert({ user_id: user.id, mood_score: mood, notes });
-        fetchMoodEntries();
-        return status === 201;
-    };
+    const fetchClientsForCounselor = useCallback(async (counselorId: string | undefined) => {
+        if (!counselorId) return;
+        setLoading(prev => ({...prev, clients: true}));
+        try {
+            // Get the counselor's numeric ID first
+            const { data: counselorData } = await supabase
+                .from('counselors')
+                .select('id')
+                .eq('profile_id', counselorId)
+                .single();
+            
+            if (counselorData) {
+                // Get appointments for this counselor to find clients
+                const { data: appointmentData } = await supabase
+                    .from('appointments')
+                    .select('user_id')
+                    .eq('counselor_id', counselorData.id);
+                
+                if (appointmentData && appointmentData.length > 0) {
+                    const userIds = [...new Set(appointmentData.map(apt => apt.user_id))];
+                    const { data: clientData, error } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .in('id', userIds);
+                    
+                    if (error) throw error;
+                    setClients(clientData || []);
+                } else {
+                    setClients([]);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching clients for counselor:", error);
+            setClients([]);
+        } finally {
+            setLoading(prev => ({...prev, clients: false}));
+        }
+    }, []);
+
+    const getCounselorDashboardStats = useCallback(async (counselorId: string | undefined) => {
+        if (!counselorId) return;
+        setLoading(prev => ({...prev, dashboardStats: true}));
+        try {
+            // Get the counselor's numeric ID first
+            const { data: counselorData } = await supabase
+                .from('counselors')
+                .select('id')
+                .eq('profile_id', counselorId)
+                .single();
+            
+            if (counselorData) {
+                // Get appointments count
+                const { count: appointmentsCount } = await supabase
+                    .from('appointments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('counselor_id', counselorData.id);
+                
+                // Get completed appointments count
+                const { count: completedCount } = await supabase
+                    .from('appointments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('counselor_id', counselorData.id)
+                    .eq('status', 'completed');
+                
+                const stats: CounselorDashboardStats = {
+                    totalAppointments: appointmentsCount || 0,
+                    completedAppointments: completedCount || 0,
+                    pendingAppointments: (appointmentsCount || 0) - (completedCount || 0),
+                    totalClients: clients.length,
+                    averageRating: 4.5, // Placeholder - implement actual rating logic
+                    monthlyRevenue: 0 // Placeholder - implement actual revenue logic
+                };
+                
+                setCounselorDashboardStats(stats);
+            }
+        } catch (error) {
+            console.error("Error fetching counselor dashboard stats:", error);
+            setCounselorDashboardStats(null);
+        } finally {
+            setLoading(prev => ({...prev, dashboardStats: false}));
+        }
+    }, [clients.length]);
+
+    const bookAppointment = useCallback(async (counselorId: number, appointmentTime: Date) => {
+        if (!user?.id) return false;
+        try {
+            const { error } = await supabase.from('appointments').insert({
+                user_id: user.id,
+                counselor_id: counselorId,
+                appointment_time: appointmentTime.toISOString(),
+                status: 'confirmed'
+            });
+            if (error) throw error;
+            await fetchAppointments(); // This call is now safe because fetchAppointments is stable
+            return true;
+        } catch(e) {
+            console.error("Error booking appointment", e);
+            return false;
+        }
+    }, [user?.id, fetchAppointments]); // Stable dependency
+
+    const getUserInsights = useCallback(async () => {
+        if (!user?.id) return;
+        setLoading(prev => ({...prev, insights: true}));
+        try {
+            // Get mood entries for the last 30 days
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            
+            const { data: moodData } = await supabase
+                .from('mood_entries')
+                .select('*')
+                .eq('user_id', user.id)
+                .gte('created_at', thirtyDaysAgo.toISOString());
+            
+            // Get completed appointments count
+            const { count: sessionsCount } = await supabase
+                .from('appointments')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .eq('status', 'completed');
+            
+            const averageMood = moodData && moodData.length > 0 
+                ? moodData.reduce((sum, entry) => sum + entry.mood_score, 0) / moodData.length 
+                : 0;
+            
+            const insights: WellnessInsights = {
+                mood_average: Math.round(averageMood * 10) / 10,
+                sessions_completed: sessionsCount || 0,
+                streak: 0 // Placeholder - implement actual streak logic
+            };
+            
+            setWellnessInsights(insights);
+        } catch (error) {
+            console.error("Error fetching user insights:", error);
+            setWellnessInsights(null);
+        } finally {
+            setLoading(prev => ({...prev, insights: false}));
+        }
+    }, [user?.id]);
+
+    const fetchMoodEntries = useCallback(async () => {
+        if (!user?.id) return;
+        setLoading(prev => ({...prev, moodEntries: true}));
+        try {
+            const { data, error } = await supabase
+                .from('mood_entries')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            setMoodEntries(data || []);
+        } catch (error) {
+            console.error("Error fetching mood entries:", error);
+            setMoodEntries([]);
+        } finally {
+            setLoading(prev => ({...prev, moodEntries: false}));
+        }
+    }, [user?.id]);
+
+    const addMoodEntry = useCallback(async (moodScore: number, notes?: string) => {
+        if (!user?.id) return false;
+        try {
+            const { error } = await supabase.from('mood_entries').insert({
+                user_id: user.id,
+                mood_score: moodScore,
+                notes: notes || null
+            });
+            if (error) throw error;
+            await fetchMoodEntries(); // Refresh mood entries
+            return true;
+        } catch (error) {
+            console.error("Error adding mood entry:", error);
+            return false;
+        }
+    }, [user?.id, fetchMoodEntries]);
+
+    const fetchWellnessResources = useCallback(async () => {
+        setLoading(prev => ({...prev, wellnessResources: true}));
+        try {
+            const { data, error } = await supabase
+                .from('wellness_resources')
+                .select('*');
+            if (error) throw error;
+            setWellnessResources(data || []);
+        } catch (error) {
+            console.error("Error fetching wellness resources:", error);
+            setWellnessResources([]);
+        } finally {
+            setLoading(prev => ({...prev, wellnessResources: false}));
+        }
+    }, []);
+
+    const fetchOrganizations = useCallback(async () => {
+        setLoading(prev => ({...prev, organizations: true}));
+        try {
+            const { data, error } = await supabase
+                .from('organizations')
+                .select('*');
+            if (error) throw error;
+            setOrganizations(data || []);
+        } catch (error) {
+            console.error("Error fetching organizations:", error);
+            setOrganizations([]);
+        } finally {
+            setLoading(prev => ({...prev, organizations: false}));
+        }
+    }, []);
+
+    const fetchConversations = useCallback(async () => {
+        if (!user?.id) return;
+        setLoading(prev => ({...prev, conversations: true}));
+        try {
+            // Use user_id instead of client_id
+            const { data, error } = await supabase
+                .from('conversations')
+                .select('*')
+                .or(`user_id.eq.${user.id},counselor_id.eq.${user.id}`);
+            if (error) throw error;
+            setConversations(data || []);
+        } catch (error) {
+            console.error("Error fetching conversations:", error);
+            setConversations([]);
+        } finally {
+            setLoading(prev => ({...prev, conversations: false}));
+        }
+    }, [user?.id]);
+
+    const fetchCompanyAnalytics = useCallback(async () => {
+        setLoading(prev => ({...prev, companyAnalytics: true}));
+        try {
+            // Placeholder implementation - implement actual analytics logic
+            const analytics: CompanyAnalytics = {
+                totalUsers: 0,
+                activeUsers: 0,
+                totalSessions: 0,
+                averageSessionDuration: 0,
+                userSatisfaction: 0
+            };
+            setCompanyAnalytics(analytics);
+        } catch (error) {
+            console.error("Error fetching company analytics:", error);
+            setCompanyAnalytics(null);
+        } finally {
+            setLoading(prev => ({...prev, companyAnalytics: false}));
+        }
+    }, []);
+
+    const fetchRecentActivity = useCallback(async () => {
+        if (!user?.id) return;
+        setLoading(prev => ({...prev, recentActivity: true}));
+        try {
+            // Placeholder implementation - implement actual activity logic
+            const activity: RecentActivity[] = [];
+            setRecentActivity(activity);
+        } catch (error) {
+            console.error("Error fetching recent activity:", error);
+            setRecentActivity([]);
+        } finally {
+            setLoading(prev => ({...prev, recentActivity: false}));
+        }
+    }, [user?.id]);
+
+    const fetchClientDetails = useCallback(async () => {
+        setLoading(prev => ({...prev, clientDetails: true}));
+        try {
+            // Placeholder implementation - implement actual client details logic
+            const details: ClientDetails[] = [];
+            setClientDetails(details);
+        } catch (error) {
+            console.error("Error fetching client details:", error);
+            setClientDetails([]);
+        } finally {
+            setLoading(prev => ({...prev, clientDetails: false}));
+        }
+    }, []);
+
+    const fetchGeneratedReports = useCallback(async () => {
+        setLoading(prev => ({...prev, generatedReports: true}));
+        try {
+            // Placeholder implementation - implement actual reports logic
+            const reports: GeneratedReport[] = [];
+            setGeneratedReports(reports);
+        } catch (error) {
+            console.error("Error fetching generated reports:", error);
+            setGeneratedReports([]);
+        } finally {
+            setLoading(prev => ({...prev, generatedReports: false}));
+        }
+    }, []);
     
-    const fetchMoodEntries = useCallback(async (timeframe = 'week') => {
-        if (!user) return;
-        setLoading(prev => ({ ...prev, mood: true }));
-        const date = new Date();
-        let startDate: string;
-        if (timeframe === 'day') {
-          startDate = new Date(date.setDate(date.getDate() - 1)).toISOString();
-        } else if (timeframe === 'month') {
-          startDate = new Date(date.setMonth(date.getMonth() - 1)).toISOString();
-        } else {
-          startDate = new Date(date.setDate(date.getDate() - 7)).toISOString();
-        }
-        const { data, error } = await supabase
-          .from('mood_entries')
-          .select('*')
-          .eq('user_id', user.id)
-          .gte('created_at', startDate)
-          .order('created_at', { ascending: false });
-        if (error) {
-          Alert.alert('Error', 'Could not fetch mood entries.');
-          console.error(error);
-        } else {
-          setMoodEntries(data);
-        }
-        setLoading(prev => ({ ...prev, mood: false }));
-    }, [user]);
-
-    // Your other functions are preserved here...
-    const createAppointment = async (appointmentData: Partial<Appointment>) => { return {}; };
-    const bookAppointment = async (counselorId: number) => { return true; };
-    const updateAppointment = async (appointmentId: number, updates: any) => { return true; };
-    const getUserInsights = async () => {};
-    const getWellnessResources = async () => {};
-    const fetchClientDetails = async (clientId: string) => {};
-    const fetchClientsForCounselor = useCallback(async () => {}, []);
-    const getCounselorDashboardStats = useCallback(async () => {}, []);
-    const getRecentActivity = useCallback(async () => {}, []);
-    const fetchConversations = async (userId: string) => {};
-    const fetchMessages = async (conversationId: string) => {};
-    const sendMessage = async (conversationId: string, messageText: string) => {};
-    const updateCounselorDetails = async (details: Partial<Counselor>) => { return true; };
-    const updateUserProfile = async (updates: Partial<UserProfile>) => { return true; };
-    const fetchCounselorDetails = useCallback(async () => {}, []);
-    const fetchOrganization = async () => {};
-    const fetchRecentReports = async () => {};
-    const getCompanyAnalytics = async () => {};
-
-    // --- FINAL, ROBUST, NON-STREAMING AI CHAT FUNCTIONS ---
-    const sendAIMessage = async (
-      conversationId: string | null,
-      messages: AIMessage[]
-    ): Promise<{ conversationId: string; reply: string | null }> => {
-      if (!user || !session) throw new Error("User not authenticated");
-
-      let currentConversationId = conversationId;
-      const userMessage = messages[messages.length - 1];
-
-      if (!currentConversationId) {
-        const { data, error } = await supabase.from('ai_conversations').insert({ user_id: user.id }).select('id').single();
-        if (error) { console.error("Error creating AI conversation:", error); throw error; }
-        currentConversationId = data.id;
-      }
-      await supabase.from('ai_messages').insert({
-        conversation_id: currentConversationId,
-        role: userMessage.role,
-        content: userMessage.content,
-      });
-
-      // Using a standard fetch call is more robust for handling weird response objects
-      const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/ai-chat`;
-      const response = await fetch(functionUrl, {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ messages }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ error: 'The AI assistant is currently unavailable.' }));
-        console.error('Edge Function returned a non-ok response:', errorBody);
-        throw new Error(errorBody.error || 'The AI assistant is currently unavailable.');
-      }
-      
-      const responseData = await response.json();
-      const reply = responseData?.reply;
-
-      if (typeof reply !== 'string') {
-        console.error("Invalid response from ai-chat function. Expected a string reply but got:", responseData);
-        throw new TypeError("Received an invalid response from the server.");
-      }
-
-      return { conversationId: currentConversationId, reply };
-    };
-
-    const fetchAIMessages = async (conversationId: string): Promise<AIMessage[]> => { return []; };
-
-    // --- Your Original useEffect hook, fully preserved ---
+    // **THE DEFINITIVE FIX FOR THE INFINITE LOOP**
+    // This useEffect hook now has stable dependencies. It will only re-run if the
+    // user's ID or profile's ID actually changes (i.e., on login/logout),
+    // which is the correct and intended behavior.
     useEffect(() => {
-        if (!authLoading && user && profile) {
+        let isMounted = true;
+        if (user && profile) {
             setDataLoading(true);
-            if (profile.role === 'user') {
-                Promise.all([fetchAppointments(), fetchCounselors()]).finally(() => setDataLoading(false));
-            } else if (profile.role === 'counselor') {
-                Promise.all([fetchClientsForCounselor(), getCounselorDashboardStats()]).finally(() => setDataLoading(false));
-            }
-            else {
-                setDataLoading(false);
-            }
-        } else if (!authLoading) {
-            setDataLoading(false);
+            (async () => {
+                await Promise.all([
+                    fetchAppointments(),
+                    fetchCounselors(),
+                    fetchMoodEntries(),
+                    fetchWellnessResources(),
+                    fetchOrganizations(),
+                    fetchConversations(),
+                    fetchCompanyAnalytics(),
+                    fetchRecentActivity(),
+                    fetchClientDetails(),
+                    fetchGeneratedReports(),
+                    profile.role === 'counselor' ? fetchClientsForCounselor(profile.id) : Promise.resolve(),
+                    profile.role === 'counselor' ? getCounselorDashboardStats(profile.id) : Promise.resolve(),
+                    getUserInsights()
+                ]);
+                if (isMounted) setDataLoading(false);
+            })();
         }
-    }, [authLoading, user, profile, fetchAppointments, fetchCounselors, fetchClientsForCounselor, getCounselorDashboardStats]);
+        return () => { isMounted = false; };
+    }, [user?.id, profile?.id, profile?.role]);
 
-    // The complete value object for the Provider
-    const value = {
-        dataLoading,
-        loading,
+    const value = useMemo(() => ({
+        dataLoading, 
+        loading, 
+        appointments, 
+        counselors, 
+        clients, 
         moodEntries,
-        appointments,
-        counselors,
-        aiChats,
         wellnessInsights,
         wellnessResources,
-        clients,
-        clientDetails,
-        counselor,
-        counselorStats,
-        recentActivity,
+        organizations,
         conversations,
-        messages,
-        organization,
         companyAnalytics,
-        recentReports,
-        fetchMoodEntries,
-        fetchAppointments,
+        counselorDashboardStats,
+        recentActivity,
+        clientDetails,
+        generatedReports,
+        bookAppointment, 
+        sendAIMessage, 
+        fetchAppointments, 
         fetchCounselors,
-        createAppointment,
-        addMoodEntry,
-        bookAppointment,
-        updateAppointment,
+        fetchClientsForCounselor, 
+        getCounselorDashboardStats, 
         getUserInsights,
-        getWellnessResources,
-        fetchClientDetails,
-        fetchClientsForCounselor,
-        getCounselorDashboardStats,
-        getRecentActivity,
+        fetchMoodEntries,
+        addMoodEntry,
+        fetchWellnessResources,
+        fetchOrganizations,
         fetchConversations,
-        fetchMessages,
-        sendMessage,
-        updateCounselorDetails,
-        updateUserProfile,
-        fetchCounselorDetails,
-        fetchOrganization,
-        fetchRecentReports,
-        getCompanyAnalytics,
-        sendAIMessage,
-        fetchAIMessages,
-    };
+        fetchCompanyAnalytics,
+        fetchRecentActivity,
+        fetchClientDetails,
+        fetchGeneratedReports
+    }), [
+        dataLoading, 
+        loading, 
+        appointments, 
+        counselors, 
+        clients, 
+        moodEntries,
+        wellnessInsights,
+        wellnessResources,
+        organizations,
+        conversations,
+        companyAnalytics,
+        counselorDashboardStats,
+        recentActivity,
+        clientDetails,
+        generatedReports,
+        bookAppointment, 
+        sendAIMessage, 
+        fetchAppointments, 
+        fetchCounselors,
+        fetchClientsForCounselor, 
+        getCounselorDashboardStats, 
+        getUserInsights,
+        fetchMoodEntries,
+        addMoodEntry,
+        fetchWellnessResources,
+        fetchOrganizations,
+        fetchConversations,
+        fetchCompanyAnalytics,
+        fetchRecentActivity,
+        fetchClientDetails,
+        fetchGeneratedReports
+    ]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
