@@ -27,6 +27,19 @@ const main_system_prompt = `You are "Soul," a supportive and empathetic well-bei
 - **CRISIS PROTOCOL (IMMEDIATE ACTION):** If a user expresses any intent of self-harm, suicide, or harming others, you MUST immediately and without deviation trigger the application's crisis protocol. Do not try to handle the situation yourself.
 - **NO FACTUAL RECALL:** Do not act like a search engine. Avoid providing detailed statistics, data, or complex factual information, even if related to psychology. Your role is conversational and supportive, not informational.`
 
+const summarizer_system_prompt = `
+  You are an expert summarization AI. Your ONLY task is to analyze the provided conversation history and generate a structured JSON object.
+  You MUST respond with ONLY a valid JSON object containing a 'title' (string), a 'summary' (string), and 'key_themes' (an array of strings).
+  DO NOT add any introductory text, conversation, or markdown formatting like ```json. Your entire output must be the raw JSON object itself.
+
+  Example of your required output format:
+  {
+    "title": "A Reflective Title",
+    "summary": "A concise summary of the conversation.",
+    "key_themes": ["Theme 1", "Theme 2"]
+  }
+`;
+
 // Define the tool the AI can call for summarization
 const tools = [{
   functionDeclarations: [{
@@ -45,69 +58,99 @@ const tools = [{
 }];
 
 serve(async (req) => {
+  // 1. Handle CORS preflight request
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { conversationHistory, action } = await req.json();
-    const API_KEY = Deno.env.get('GEMINI_API_KEY');
-    if (!API_KEY) throw new Error("Missing GEMINI_API_KEY from Supabase secrets");
+    console.log("Edge Function invoked.");
 
-    const genAI = new GoogleGenerativeAI(API_KEY);
+    // 2. Extract request body
+    const { history, action } = await req.json();
+    console.log("Request received. Action:", action);
+    console.log("Received history length:", history ? history.length : 'No history');
 
-    if (action === 'summarize') {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', tools });
-      // Add a system message to reinforce tool use
-      const chat = model.startChat({ history: [
-        { role: "user", parts: [{ text: `SYSTEM: You are an AI journaling assistant. You must ONLY use the journalSummary tool to respond. Do NOT reply with text, do NOT explain, do NOT apologize—just call the tool. If you do not use the tool, your response will be ignored. If you do not have enough information, call the tool with an error message in the summary field.` }] },
-        ...conversationHistory
-      ] });
-      const result = await chat.sendMessage(conversationHistory.slice(-1)[0].parts[0].text);
-      // Log the raw Gemini response for debugging
-      console.log("Raw Gemini response:", JSON.stringify(result.response, null, 2));
-      const call = result.response.functionCalls?.[0];
-
-      if (call?.name === 'journalSummary' && call.args) {
-        return new Response(JSON.stringify(call.args), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
-        });
-      } else {
-        // Log the full Gemini response for debugging fallback
-        console.log("Full Gemini response for fallback:", JSON.stringify(result.response, null, 2));
-        // Fallback: try to extract plain text summary
-        const candidates = result.response.candidates;
-        if (candidates && candidates[0]?.content?.parts?.[0]?.text) {
-          const fallbackSummary = candidates[0].content.parts[0].text;
-          return new Response(JSON.stringify({
-            fallback: true,
-            summary: fallbackSummary
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200,
-          });
-        }
-        console.error("AI did not return a valid function call.", result.response);
-        throw new Error('AI did not return a valid function call for summarization.');
-      }
-    } else {
-      // Standard chat logic
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const chat = model.startChat({
-        history: [{ role: 'user', parts: [{ text: main_system_prompt }] }, ...conversationHistory],
-      });
-      const lastMessage = conversationHistory.slice(-1)[0].parts[0].text;
-      const result = await chat.sendMessage(lastMessage);
-      const text = result.response.text();
-      
-      return new Response(JSON.stringify({ reply: text }), {
+    if (!history || !action) {
+      console.error("Missing history or action in the request body.");
+      return new Response(JSON.stringify({ error: 'Missing history or action' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
+        status: 400,
       });
     }
-  } catch (error: any) {
-    console.error('Edge function error:', error.message);
+
+    const genAI = new GoogleGenerativeAI(Deno.env.get('GEMINI_API_KEY')!);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    // 3. Handle 'summarize' action
+    if (action === 'summarize') {
+        console.log("Executing 'summarize' action.");
+
+        const userPrompt = `Please summarize the following conversation history into a JSON object as instructed:\n\n${JSON.stringify(history, null, 2)}`;
+
+        const result = await model.generateContent([
+            { role: 'user', parts: [{ text: summarizer_system_prompt }] },
+            { role: 'model', parts: [{ text: "Okay, I am ready. Please provide the conversation history to be summarized into a JSON object." }] },
+            { role: 'user', parts: [{ text: userPrompt }] }
+        ]);
+
+        const response = result.response;
+        const summaryText = response.text();
+
+        console.log("Received raw summary from Gemini:", summaryText);
+
+        try {
+            const parsedSummary = JSON.parse(summaryText);
+            console.log("Successfully parsed summary JSON.");
+            return new Response(JSON.stringify({ summary: parsedSummary }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200,
+            });
+        } catch (e) {
+            console.error("Failed to parse summary text as JSON:", e);
+            return new Response(JSON.stringify({ error: "AI returned invalid JSON", details: summaryText }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 500,
+            });
+        }
+    }
+
+    // 4. Handle 'chat' action (existing logic)
+    if (action === 'chat') {
+        console.log("Executing 'chat' action.");
+        const chat = model.startChat({
+            history: [
+                { role: 'user', parts: [{ text: main_system_prompt }] },
+                { role: 'model', parts: [{ text: "Okay, I am ready to help. What's on your mind?" }] },
+                ...history
+            ]
+        });
+
+        const lastMessage = history.pop();
+        const result = await chat.sendMessage(lastMessage.parts[0].text);
+        const response = result.response;
+        const text = response.text();
+
+        console.log("Received chat response from Gemini:", text);
+
+        return new Response(JSON.stringify({ response: text }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+        });
+    }
+
+    // 5. Handle unknown action
+    console.error("Unknown action specified:", action);
+    return new Response(JSON.stringify({ error: 'Unknown action' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+    });
+
+  } catch (error) {
+    // 6. Catch and log any unexpected errors
+    console.error('Critical error in Edge Function:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

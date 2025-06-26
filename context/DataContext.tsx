@@ -51,6 +51,7 @@ interface DataContextType {
   createJournalEntry: (conversationHistory: any[]) => Promise<void>;
   saveJournalEntry: (entry: { title: string; summary: string; key_themes: string[] }) => Promise<void>;
   deleteJournalEntry: (id: string) => Promise<void>;
+  updateJournalEntry: (id: string, title: string, summary: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -501,6 +502,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const updateJournalEntry = async (id: string, title: string, summary: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('journal_entries')
+          .update({ title, summary })
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setJournalEntries(prevEntries =>
+            prevEntries.map(entry => (entry.id === id ? data : entry))
+          );
+          Alert.alert('Success', 'Journal entry updated.');
+        }
+      } catch (error: any) {
+        Alert.alert('Error', 'Could not update journal entry.');
+        console.error('Error updating journal entry:', error);
+      }
+    };
+
     const createJournalEntry = async (conversationHistory: any[]) => {
       setLoading(prev => ({ ...prev, createJournal: true }));
       try {
@@ -604,7 +628,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         fetchJournalEntries,
         createJournalEntry,
         saveJournalEntry,
-        deleteJournalEntry
+        deleteJournalEntry,
+        updateJournalEntry
     }), [
         dataLoading, 
         loading, 
@@ -641,7 +666,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         fetchJournalEntries,
         createJournalEntry,
         saveJournalEntry,
-        deleteJournalEntry
+        deleteJournalEntry,
+        updateJournalEntry
     ]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

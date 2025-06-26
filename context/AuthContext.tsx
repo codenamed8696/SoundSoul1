@@ -5,6 +5,7 @@ import { createContext, useState, useEffect, useContext, ReactNode } from 'react
 import { supabase } from './supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
 import { UserProfile } from '../types';
+import { Alert } from 'react-native';
 
 // The context interface is updated to include the new loading state.
 interface AuthContextType {
@@ -15,9 +16,20 @@ interface AuthContextType {
   signIn: (email, password) => Promise<any>;
   signUp: (email, password, fullName) => Promise<any>;
   signOut: () => Promise<any>;
+  preferences: UserPreferences | null;
+  fetchPreferences: () => Promise<void>;
+  updatePreferences: (updates: Partial<UserPreferences>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Add UserPreferences type
+interface UserPreferences {
+  id: string;
+  mood_reminders_enabled: boolean;
+  journal_prompts_enabled: boolean;
+  updated_at: string;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -26,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // THE FIX: Initialize authLoading to true. It will be set to false
   // only after the initial check with Supabase is complete.
   const [authLoading, setAuthLoading] = useState(true);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
 
   useEffect(() => {
     // This effect hook runs once on app startup to check the auth state.
@@ -88,6 +101,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   
+  const fetchPreferences = async () => {
+    if (!user) return;
+    const { data, error } = await supabase.from('user_preferences').select('*').eq('id', user.id).single();
+    if (error) {
+      setPreferences(null);
+      return;
+    }
+    setPreferences(data);
+  };
+
+  const updatePreferences = async (updates: Partial<UserPreferences>) => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .update(updates)
+      .eq('id', user.id)
+      .select()
+      .single();
+    if (error) {
+      Alert.alert('Error', 'Could not update preferences.');
+      return;
+    }
+    setPreferences(data);
+  };
+
+  useEffect(() => {
+    if (user) fetchPreferences();
+  }, [user]);
+
   // --- No changes to your existing signIn, signUp, or signOut functions ---
 
   const value = {
@@ -111,6 +153,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { user: data.user, session: data.session, error: null };
     },
     signOut: () => supabase.auth.signOut(),
+    preferences,
+    fetchPreferences,
+    updatePreferences,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
