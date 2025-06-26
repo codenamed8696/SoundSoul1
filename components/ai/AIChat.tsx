@@ -4,7 +4,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, TextInput, Text, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, TouchableOpacity, FlatList, SafeAreaView } from 'react-native';
 import { useData } from '@/context/DataContext';
-import CrisisModal from '@/components/common/CrisisModal'; 
+import CrisisModal from '@/components/common/CrisisModal';
+import { Button } from '@/components/common/Button';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -18,7 +19,7 @@ const AIChat = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [crisisModalVisible, setCrisisModalVisible] = useState(false);
-  const { sendAIMessage } = useData(); 
+  const { sendAIMessage, createJournalEntry, loading } = useData(); 
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
@@ -51,6 +52,17 @@ const AIChat = () => {
     }
   };
 
+  // Helper to convert messages to Gemini format
+  const getConversationHistoryForJournal = () =>
+    messages.map((m) => ({ role: m.role, parts: [{ text: m.content }] }));
+
+  const handleCreateJournalEntry = (messages: any[]) => {
+    if (!loading.createJournal) {
+      // Map 'assistant' to 'model' for Gemini compatibility
+      createJournalEntry(messages.map(m => ({ role: m.role === 'assistant' ? 'model' : m.role, text: m.content })));
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container} keyboardVerticalOffset={88}>
@@ -73,6 +85,14 @@ const AIChat = () => {
         </View>
       </KeyboardAvoidingView>
       <CrisisModal visible={crisisModalVisible} onClose={() => setCrisisModalVisible(false)} />
+      {/* Journal Button */}
+      <View style={{ padding: 10 }}>
+        <Button
+          title="Create Journal Entry"
+          onPress={() => handleCreateJournalEntry(messages)}
+          disabled={messages.length <= 4 || loading.createJournal}
+        />
+      </View>
     </SafeAreaView>
   );
 };

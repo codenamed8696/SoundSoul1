@@ -7,8 +7,9 @@ import { useAuth } from './AuthContext';
 import {
   Appointment, Organization, UserProfile, Counselor,
   MoodEntry, Conversation, Message as CounselorMessage, AIChat as DeprecatedAIChat, WellnessInsights, CompanyAnalytics,
-  CounselorDashboardStats, RecentActivity, ClientDetails, GeneratedReport, WellnessResource
+  CounselorDashboardStats, RecentActivity, ClientDetails, GeneratedReport, WellnessResource, JournalEntry
 } from '../types';
+import { Alert } from 'react-native';
 
 // Define the shape of the data and functions the context will provide
 interface DataContextType {
@@ -27,6 +28,7 @@ interface DataContextType {
   recentActivity: RecentActivity[];
   clientDetails: ClientDetails[];
   generatedReports: GeneratedReport[];
+  journalEntries: JournalEntry[];
 
   // All functions must be defined here
   bookAppointment: (counselorId: number, appointmentTime: Date) => Promise<boolean>;
@@ -45,6 +47,10 @@ interface DataContextType {
   fetchRecentActivity: () => Promise<void>;
   fetchClientDetails: () => Promise<void>;
   fetchGeneratedReports: () => Promise<void>;
+  fetchJournalEntries: () => Promise<void>;
+  createJournalEntry: (conversationHistory: any[]) => Promise<void>;
+  saveJournalEntry: (entry: { title: string; summary: string; key_themes: string[] }) => Promise<void>;
+  deleteJournalEntry: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -68,19 +74,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
     const [clientDetails, setClientDetails] = useState<ClientDetails[]>([]);
     const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>([]);
+    const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
 
     // The stable, non-streaming AI Chat function
     const sendAIMessage = useCallback(async (currentMessages: any[]) => {
         setLoading(prev => ({ ...prev, aiChat: true }));
         try {
+          // Ensure the first message is from the user for Gemini compatibility
+          const filteredMessages = currentMessages[0]?.role === 'assistant' || currentMessages[0]?.role === 'model'
+            ? currentMessages.slice(1)
+            : currentMessages;
+          const mappedMessages = filteredMessages.map(m => ({
+            role: m.role === 'assistant' ? 'model' : m.role,
+            parts: [{ text: m.content }]
+          }));
+          console.log('Payload sent to backend:', JSON.stringify(mappedMessages, null, 2));
           const { data, error } = await supabase.functions.invoke('ai-chat', {
-            body: { messages: currentMessages },
+            body: { conversationHistory: mappedMessages, action: 'chat' },
           });
     
-          if (error) { throw error; }
+          if (error) throw error;
           if (typeof data?.reply !== 'string') {
             throw new TypeError('Received an invalid response from the server.');
           }
+          console.log("Raw Gemini response:", JSON.stringify(data, null, 2));
           return { reply: data.reply };
     
         } catch (err) {
@@ -430,6 +447,95 @@ export function DataProvider({ children }: { children: ReactNode }) {
             setLoading(prev => ({...prev, generatedReports: false}));
         }
     }, []);
+
+    const fetchJournalEntries = useCallback(async () => {
+      if (!user?.id) return;
+      setLoading(prev => ({ ...prev, journalEntries: true }));
+      try {
+        const { data, error } = await supabase
+          .from('journal_entries')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        setJournalEntries(data || []);
+      } catch (error) {
+        console.error('Error fetching journal entries:', error);
+        setJournalEntries([]);
+      } finally {
+        setLoading(prev => ({ ...prev, journalEntries: false }));
+      }
+    }, [user?.id]);
+
+    const saveJournalEntry = useCallback(async ({ title, summary, key_themes }: { title: string; summary: string; key_themes: string[] }) => {
+      if (!user?.id) return;
+      // Get latest mood score if available
+      const latestMood = moodEntries.length > 0 ? moodEntries[0].mood_score : null;
+      setLoading(prev => ({ ...prev, saveJournal: true }));
+      try {
+        const { error } = await supabase.from('journal_entries').insert({
+          user_id: user.id,
+          title,
+          summary,
+          key_themes,
+          mood_score_at_time: latestMood,
+        });
+        if (error) throw error;
+        Alert.alert('Success', 'Journal entry saved!');
+        await fetchJournalEntries();
+      } catch (err) {
+        Alert.alert('Error', 'Failed to save journal entry.');
+      } finally {
+        setLoading(prev => ({ ...prev, saveJournal: false }));
+      }
+    }, [user?.id, moodEntries, fetchJournalEntries]);
+
+    const deleteJournalEntry = async (id: string) => {
+      const { error } = await supabase.from('journal_entries').delete().match({ id });
+      if (error) {
+        Alert.alert('Error', 'Could not delete journal entry.');
+        console.error(error);
+      } else {
+        setJournalEntries(prev => prev.filter(entry => entry.id !== id));
+        Alert.alert('Success', 'Journal entry deleted.');
+      }
+    };
+
+    const createJournalEntry = async (conversationHistory: any[]) => {
+      setLoading(prev => ({ ...prev, createJournal: true }));
+      try {
+        // Ensure the first message is from the user for Gemini compatibility
+        const filteredHistory = conversationHistory[0]?.role === 'assistant' || conversationHistory[0]?.role === 'model'
+          ? conversationHistory.slice(1)
+          : conversationHistory;
+        const formattedHistory = filteredHistory.map(msg => ({
+          role: msg.role, // already mapped in AIChat.tsx
+          parts: [{ text: msg.text }],
+        }));
+        console.log('Formatted history sent to backend:', formattedHistory);
+
+        const { data: summaryData, error } = await supabase.functions.invoke('ai-chat', {
+          body: { action: 'summarize', conversationHistory: formattedHistory },
+        });
+        console.log('Backend response:', { data: summaryData, error });
+
+        if (error) {
+          throw error;
+        }
+
+        Alert.alert('Save Journal Entry?', `Title: ${summaryData.title}\n\nSummary: ${summaryData.summary}`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save', onPress: () => saveJournalEntry(summaryData) },
+        ]);
+
+      } catch (err: any) {
+        const errorDetails = err.context?.json ? JSON.stringify(err.context.json) : err.message;
+        console.error('Error generating journal summary:', errorDetails);
+        Alert.alert('Error', 'Failed to generate journal summary. Please try again.');
+      } finally {
+        setLoading(prev => ({ ...prev, createJournal: false }));
+      }
+    };
     
     // **THE DEFINITIVE FIX FOR THE INFINITE LOOP**
     // This useEffect hook now has stable dependencies. It will only re-run if the
@@ -451,6 +557,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
                     fetchRecentActivity(),
                     fetchClientDetails(),
                     fetchGeneratedReports(),
+                    fetchJournalEntries(),
                     profile.role === 'counselor' ? fetchClientsForCounselor(profile.id) : Promise.resolve(),
                     profile.role === 'counselor' ? getCounselorDashboardStats(profile.id) : Promise.resolve(),
                     getUserInsights()
@@ -477,6 +584,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         recentActivity,
         clientDetails,
         generatedReports,
+        journalEntries,
         bookAppointment, 
         sendAIMessage, 
         fetchAppointments, 
@@ -492,7 +600,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         fetchCompanyAnalytics,
         fetchRecentActivity,
         fetchClientDetails,
-        fetchGeneratedReports
+        fetchGeneratedReports,
+        fetchJournalEntries,
+        createJournalEntry,
+        saveJournalEntry,
+        deleteJournalEntry
     }), [
         dataLoading, 
         loading, 
@@ -509,6 +621,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         recentActivity,
         clientDetails,
         generatedReports,
+        journalEntries,
         bookAppointment, 
         sendAIMessage, 
         fetchAppointments, 
@@ -524,7 +637,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         fetchCompanyAnalytics,
         fetchRecentActivity,
         fetchClientDetails,
-        fetchGeneratedReports
+        fetchGeneratedReports,
+        fetchJournalEntries,
+        createJournalEntry,
+        saveJournalEntry,
+        deleteJournalEntry
     ]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

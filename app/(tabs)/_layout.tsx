@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Home, Heart, MessageSquare, Calendar, User } from 'lucide-react-native';
+import { Home, Heart, MessageSquare, Calendar, User, Book } from 'lucide-react-native';
 
 export default function TabsLayout() {
   return (
@@ -20,6 +20,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ tabBarIcon: ({ color }) => <Home color={color} /> }} />
       <Tabs.Screen name="wellness" options={{ tabBarIcon: ({ color }) => <Heart color={color} /> }} />
       <Tabs.Screen name="chat" options={{ tabBarIcon: ({ color }) => <MessageSquare color={color} /> }} />
+      <Tabs.Screen name="journal" options={{ title: 'Journal', tabBarIcon: ({ color }) => <Book color={color} /> }} />
       <Tabs.Screen name="appointments" options={{ title: 'Appointments', tabBarIcon: ({ color }) => <Calendar color={color} /> }} />
       <Tabs.Screen name="profile" options={{ tabBarIcon: ({ color }) => <User color={color} /> }} />
     </Tabs>

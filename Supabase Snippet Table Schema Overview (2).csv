@@ -1,0 +1,384 @@
+table_schema,table_name,column_order,column_name,data_type,is_nullable,is_primary_key,foreign_key_references_table,foreign_key_references_column
+auth,audit_log_entries,1,instance_id,uuid,YES,NO,null,null
+auth,audit_log_entries,2,id,uuid,NO,YES,null,null
+auth,audit_log_entries,3,payload,json,YES,NO,null,null
+auth,audit_log_entries,4,created_at,timestamp with time zone,YES,NO,null,null
+auth,audit_log_entries,5,ip_address,character varying,NO,NO,null,null
+auth,flow_state,1,id,uuid,NO,YES,null,null
+auth,flow_state,2,user_id,uuid,YES,NO,null,null
+auth,flow_state,3,auth_code,text,NO,NO,null,null
+auth,flow_state,4,code_challenge_method,USER-DEFINED,NO,NO,null,null
+auth,flow_state,5,code_challenge,text,NO,NO,null,null
+auth,flow_state,6,provider_type,text,NO,NO,null,null
+auth,flow_state,7,provider_access_token,text,YES,NO,null,null
+auth,flow_state,8,provider_refresh_token,text,YES,NO,null,null
+auth,flow_state,9,created_at,timestamp with time zone,YES,NO,null,null
+auth,flow_state,10,updated_at,timestamp with time zone,YES,NO,null,null
+auth,flow_state,11,authentication_method,text,NO,NO,null,null
+auth,flow_state,12,auth_code_issued_at,timestamp with time zone,YES,NO,null,null
+auth,identities,1,provider_id,text,NO,NO,null,null
+auth,identities,2,user_id,uuid,NO,NO,null,null
+auth,identities,3,identity_data,jsonb,NO,NO,null,null
+auth,identities,4,provider,text,NO,NO,null,null
+auth,identities,5,last_sign_in_at,timestamp with time zone,YES,NO,null,null
+auth,identities,6,created_at,timestamp with time zone,YES,NO,null,null
+auth,identities,7,updated_at,timestamp with time zone,YES,NO,null,null
+auth,identities,8,email,text,YES,NO,null,null
+auth,identities,9,id,uuid,NO,YES,null,null
+auth,instances,1,id,uuid,NO,YES,null,null
+auth,instances,2,uuid,uuid,YES,NO,null,null
+auth,instances,3,raw_base_config,text,YES,NO,null,null
+auth,instances,4,created_at,timestamp with time zone,YES,NO,null,null
+auth,instances,5,updated_at,timestamp with time zone,YES,NO,null,null
+auth,mfa_amr_claims,1,session_id,uuid,NO,NO,null,null
+auth,mfa_amr_claims,2,created_at,timestamp with time zone,NO,NO,null,null
+auth,mfa_amr_claims,3,updated_at,timestamp with time zone,NO,NO,null,null
+auth,mfa_amr_claims,4,authentication_method,text,NO,NO,null,null
+auth,mfa_amr_claims,5,id,uuid,NO,YES,null,null
+auth,mfa_challenges,1,id,uuid,NO,YES,null,null
+auth,mfa_challenges,2,factor_id,uuid,NO,NO,null,null
+auth,mfa_challenges,3,created_at,timestamp with time zone,NO,NO,null,null
+auth,mfa_challenges,4,verified_at,timestamp with time zone,YES,NO,null,null
+auth,mfa_challenges,5,ip_address,inet,NO,NO,null,null
+auth,mfa_challenges,6,otp_code,text,YES,NO,null,null
+auth,mfa_challenges,7,web_authn_session_data,jsonb,YES,NO,null,null
+auth,mfa_factors,1,id,uuid,NO,YES,null,null
+auth,mfa_factors,2,user_id,uuid,NO,NO,null,null
+auth,mfa_factors,3,friendly_name,text,YES,NO,null,null
+auth,mfa_factors,4,factor_type,USER-DEFINED,NO,NO,null,null
+auth,mfa_factors,5,status,USER-DEFINED,NO,NO,null,null
+auth,mfa_factors,6,created_at,timestamp with time zone,NO,NO,null,null
+auth,mfa_factors,7,updated_at,timestamp with time zone,NO,NO,null,null
+auth,mfa_factors,8,secret,text,YES,NO,null,null
+auth,mfa_factors,9,phone,text,YES,NO,null,null
+auth,mfa_factors,10,last_challenged_at,timestamp with time zone,YES,NO,null,null
+auth,mfa_factors,11,web_authn_credential,jsonb,YES,NO,null,null
+auth,mfa_factors,12,web_authn_aaguid,uuid,YES,NO,null,null
+auth,one_time_tokens,1,id,uuid,NO,YES,null,null
+auth,one_time_tokens,2,user_id,uuid,NO,NO,null,null
+auth,one_time_tokens,3,token_type,USER-DEFINED,NO,NO,null,null
+auth,one_time_tokens,4,token_hash,text,NO,NO,null,null
+auth,one_time_tokens,5,relates_to,text,NO,NO,null,null
+auth,one_time_tokens,6,created_at,timestamp without time zone,NO,NO,null,null
+auth,one_time_tokens,7,updated_at,timestamp without time zone,NO,NO,null,null
+auth,refresh_tokens,1,instance_id,uuid,YES,NO,null,null
+auth,refresh_tokens,2,id,bigint,NO,YES,null,null
+auth,refresh_tokens,3,token,character varying,YES,NO,null,null
+auth,refresh_tokens,4,user_id,character varying,YES,NO,null,null
+auth,refresh_tokens,5,revoked,boolean,YES,NO,null,null
+auth,refresh_tokens,6,created_at,timestamp with time zone,YES,NO,null,null
+auth,refresh_tokens,7,updated_at,timestamp with time zone,YES,NO,null,null
+auth,refresh_tokens,8,parent,character varying,YES,NO,null,null
+auth,refresh_tokens,9,session_id,uuid,YES,NO,null,null
+auth,saml_providers,1,id,uuid,NO,YES,null,null
+auth,saml_providers,2,sso_provider_id,uuid,NO,NO,null,null
+auth,saml_providers,3,entity_id,text,NO,NO,null,null
+auth,saml_providers,4,metadata_xml,text,NO,NO,null,null
+auth,saml_providers,5,metadata_url,text,YES,NO,null,null
+auth,saml_providers,6,attribute_mapping,jsonb,YES,NO,null,null
+auth,saml_providers,7,created_at,timestamp with time zone,YES,NO,null,null
+auth,saml_providers,8,updated_at,timestamp with time zone,YES,NO,null,null
+auth,saml_providers,9,name_id_format,text,YES,NO,null,null
+auth,saml_relay_states,1,id,uuid,NO,YES,null,null
+auth,saml_relay_states,2,sso_provider_id,uuid,NO,NO,null,null
+auth,saml_relay_states,3,request_id,text,NO,NO,null,null
+auth,saml_relay_states,4,for_email,text,YES,NO,null,null
+auth,saml_relay_states,5,redirect_to,text,YES,NO,null,null
+auth,saml_relay_states,7,created_at,timestamp with time zone,YES,NO,null,null
+auth,saml_relay_states,8,updated_at,timestamp with time zone,YES,NO,null,null
+auth,saml_relay_states,9,flow_state_id,uuid,YES,NO,null,null
+auth,schema_migrations,1,version,character varying,NO,YES,null,null
+auth,sessions,1,id,uuid,NO,YES,null,null
+auth,sessions,2,user_id,uuid,NO,NO,null,null
+auth,sessions,3,created_at,timestamp with time zone,YES,NO,null,null
+auth,sessions,4,updated_at,timestamp with time zone,YES,NO,null,null
+auth,sessions,5,factor_id,uuid,YES,NO,null,null
+auth,sessions,6,aal,USER-DEFINED,YES,NO,null,null
+auth,sessions,7,not_after,timestamp with time zone,YES,NO,null,null
+auth,sessions,8,refreshed_at,timestamp without time zone,YES,NO,null,null
+auth,sessions,9,user_agent,text,YES,NO,null,null
+auth,sessions,10,ip,inet,YES,NO,null,null
+auth,sessions,11,tag,text,YES,NO,null,null
+auth,sso_domains,1,id,uuid,NO,YES,null,null
+auth,sso_domains,2,sso_provider_id,uuid,NO,NO,null,null
+auth,sso_domains,3,domain,text,NO,NO,null,null
+auth,sso_domains,4,created_at,timestamp with time zone,YES,NO,null,null
+auth,sso_domains,5,updated_at,timestamp with time zone,YES,NO,null,null
+auth,sso_providers,1,id,uuid,NO,YES,null,null
+auth,sso_providers,2,resource_id,text,YES,NO,null,null
+auth,sso_providers,3,created_at,timestamp with time zone,YES,NO,null,null
+auth,sso_providers,4,updated_at,timestamp with time zone,YES,NO,null,null
+auth,users,1,instance_id,uuid,YES,NO,null,null
+auth,users,2,id,uuid,NO,YES,null,null
+auth,users,3,aud,character varying,YES,NO,null,null
+auth,users,4,role,character varying,YES,NO,null,null
+auth,users,5,email,character varying,YES,NO,null,null
+auth,users,6,encrypted_password,character varying,YES,NO,null,null
+auth,users,7,email_confirmed_at,timestamp with time zone,YES,NO,null,null
+auth,users,8,invited_at,timestamp with time zone,YES,NO,null,null
+auth,users,9,confirmation_token,character varying,YES,NO,null,null
+auth,users,10,confirmation_sent_at,timestamp with time zone,YES,NO,null,null
+auth,users,11,recovery_token,character varying,YES,NO,null,null
+auth,users,12,recovery_sent_at,timestamp with time zone,YES,NO,null,null
+auth,users,13,email_change_token_new,character varying,YES,NO,null,null
+auth,users,14,email_change,character varying,YES,NO,null,null
+auth,users,15,email_change_sent_at,timestamp with time zone,YES,NO,null,null
+auth,users,16,last_sign_in_at,timestamp with time zone,YES,NO,null,null
+auth,users,17,raw_app_meta_data,jsonb,YES,NO,null,null
+auth,users,18,raw_user_meta_data,jsonb,YES,NO,null,null
+auth,users,19,is_super_admin,boolean,YES,NO,null,null
+auth,users,20,created_at,timestamp with time zone,YES,NO,null,null
+auth,users,21,updated_at,timestamp with time zone,YES,NO,null,null
+auth,users,22,phone,text,YES,NO,null,null
+auth,users,23,phone_confirmed_at,timestamp with time zone,YES,NO,null,null
+auth,users,24,phone_change,text,YES,NO,null,null
+auth,users,25,phone_change_token,character varying,YES,NO,null,null
+auth,users,26,phone_change_sent_at,timestamp with time zone,YES,NO,null,null
+auth,users,27,confirmed_at,timestamp with time zone,YES,NO,null,null
+auth,users,28,email_change_token_current,character varying,YES,NO,null,null
+auth,users,29,email_change_confirm_status,smallint,YES,NO,null,null
+auth,users,30,banned_until,timestamp with time zone,YES,NO,null,null
+auth,users,31,reauthentication_token,character varying,YES,NO,null,null
+auth,users,32,reauthentication_sent_at,timestamp with time zone,YES,NO,null,null
+auth,users,33,is_sso_user,boolean,NO,NO,null,null
+auth,users,34,deleted_at,timestamp with time zone,YES,NO,null,null
+auth,users,35,is_anonymous,boolean,NO,NO,null,null
+extensions,pg_stat_statements,1,userid,oid,YES,NO,null,null
+extensions,pg_stat_statements,2,dbid,oid,YES,NO,null,null
+extensions,pg_stat_statements,3,toplevel,boolean,YES,NO,null,null
+extensions,pg_stat_statements,4,queryid,bigint,YES,NO,null,null
+extensions,pg_stat_statements,5,query,text,YES,NO,null,null
+extensions,pg_stat_statements,6,plans,bigint,YES,NO,null,null
+extensions,pg_stat_statements,7,total_plan_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,8,min_plan_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,9,max_plan_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,10,mean_plan_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,11,stddev_plan_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,12,calls,bigint,YES,NO,null,null
+extensions,pg_stat_statements,13,total_exec_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,14,min_exec_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,15,max_exec_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,16,mean_exec_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,17,stddev_exec_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,18,rows,bigint,YES,NO,null,null
+extensions,pg_stat_statements,19,shared_blks_hit,bigint,YES,NO,null,null
+extensions,pg_stat_statements,20,shared_blks_read,bigint,YES,NO,null,null
+extensions,pg_stat_statements,21,shared_blks_dirtied,bigint,YES,NO,null,null
+extensions,pg_stat_statements,22,shared_blks_written,bigint,YES,NO,null,null
+extensions,pg_stat_statements,23,local_blks_hit,bigint,YES,NO,null,null
+extensions,pg_stat_statements,24,local_blks_read,bigint,YES,NO,null,null
+extensions,pg_stat_statements,25,local_blks_dirtied,bigint,YES,NO,null,null
+extensions,pg_stat_statements,26,local_blks_written,bigint,YES,NO,null,null
+extensions,pg_stat_statements,27,temp_blks_read,bigint,YES,NO,null,null
+extensions,pg_stat_statements,28,temp_blks_written,bigint,YES,NO,null,null
+extensions,pg_stat_statements,29,shared_blk_read_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,30,shared_blk_write_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,31,local_blk_read_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,32,local_blk_write_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,33,temp_blk_read_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,34,temp_blk_write_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,35,wal_records,bigint,YES,NO,null,null
+extensions,pg_stat_statements,36,wal_fpi,bigint,YES,NO,null,null
+extensions,pg_stat_statements,37,wal_bytes,numeric,YES,NO,null,null
+extensions,pg_stat_statements,38,jit_functions,bigint,YES,NO,null,null
+extensions,pg_stat_statements,39,jit_generation_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,40,jit_inlining_count,bigint,YES,NO,null,null
+extensions,pg_stat_statements,41,jit_inlining_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,42,jit_optimization_count,bigint,YES,NO,null,null
+extensions,pg_stat_statements,43,jit_optimization_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,44,jit_emission_count,bigint,YES,NO,null,null
+extensions,pg_stat_statements,45,jit_emission_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,46,jit_deform_count,bigint,YES,NO,null,null
+extensions,pg_stat_statements,47,jit_deform_time,double precision,YES,NO,null,null
+extensions,pg_stat_statements,48,stats_since,timestamp with time zone,YES,NO,null,null
+extensions,pg_stat_statements,49,minmax_stats_since,timestamp with time zone,YES,NO,null,null
+extensions,pg_stat_statements_info,1,dealloc,bigint,YES,NO,null,null
+extensions,pg_stat_statements_info,2,stats_reset,timestamp with time zone,YES,NO,null,null
+net,_http_response,1,id,bigint,YES,NO,null,null
+net,_http_response,2,status_code,integer,YES,NO,null,null
+net,_http_response,3,content_type,text,YES,NO,null,null
+net,_http_response,4,headers,jsonb,YES,NO,null,null
+net,_http_response,5,content,text,YES,NO,null,null
+net,_http_response,6,timed_out,boolean,YES,NO,null,null
+net,_http_response,7,error_msg,text,YES,NO,null,null
+net,_http_response,8,created,timestamp with time zone,NO,NO,null,null
+net,http_request_queue,1,id,bigint,NO,NO,null,null
+net,http_request_queue,2,method,text,NO,NO,null,null
+net,http_request_queue,3,url,text,NO,NO,null,null
+net,http_request_queue,4,headers,jsonb,NO,NO,null,null
+net,http_request_queue,5,body,bytea,YES,NO,null,null
+net,http_request_queue,6,timeout_milliseconds,integer,NO,NO,null,null
+public,appointments,1,id,bigint,NO,YES,null,null
+public,appointments,2,created_at,timestamp with time zone,NO,NO,null,null
+public,appointments,3,user_id,uuid,NO,NO,null,null
+public,appointments,4,counselor_id,bigint,NO,NO,appointments,id
+public,appointments,5,appointment_time,timestamp with time zone,YES,NO,null,null
+public,appointments,6,status,USER-DEFINED,YES,NO,null,null
+public,appointments,7,notes,text,YES,NO,null,null
+public,appointments,8,duration,integer,YES,NO,null,null
+public,appointments,9,type,text,YES,NO,null,null
+public,appointments,10,meeting_link,text,YES,NO,null,null
+public,conversations,1,id,uuid,NO,YES,null,null
+public,conversations,2,user_id,uuid,NO,NO,conversations,id
+public,conversations,3,counselor_id,uuid,YES,NO,null,null
+public,conversations,4,created_at,timestamp with time zone,NO,NO,null,null
+public,conversations,5,updated_at,timestamp with time zone,NO,NO,null,null
+public,counselors,1,id,bigint,NO,YES,null,null
+public,counselors,2,created_at,timestamp with time zone,NO,NO,null,null
+public,counselors,3,profile_id,uuid,NO,NO,counselors,id
+public,counselors,3,profile_id,uuid,NO,NO,counselors,id
+public,counselors,3,profile_id,uuid,NO,NO,counselors,profile_id
+public,counselors,4,specialties,ARRAY,YES,NO,null,null
+public,credit_transactions,1,id,uuid,NO,YES,null,null
+public,credit_transactions,2,organization_id,bigint,NO,NO,credit_transactions,id
+public,credit_transactions,3,user_id,uuid,NO,NO,null,null
+public,credit_transactions,4,service_availed,text,YES,NO,null,null
+public,credit_transactions,5,credits_used,integer,YES,NO,null,null
+public,credit_transactions,6,transaction_time,timestamp with time zone,NO,NO,null,null
+public,generated_reports,1,id,uuid,NO,YES,null,null
+public,generated_reports,2,organization_id,bigint,NO,NO,generated_reports,id
+public,generated_reports,3,report_type,text,NO,NO,null,null
+public,generated_reports,4,file_path,text,NO,NO,null,null
+public,generated_reports,5,file_size_kb,numeric,YES,NO,null,null
+public,generated_reports,6,generated_at,timestamp with time zone,NO,NO,null,null
+public,journal_entries,1,id,uuid,NO,YES,null,null
+public,journal_entries,2,user_id,uuid,NO,NO,journal_entries,id
+public,journal_entries,3,created_at,timestamp with time zone,NO,NO,null,null
+public,journal_entries,4,title,text,YES,NO,null,null
+public,journal_entries,5,summary,text,NO,NO,null,null
+public,journal_entries,6,mood_score_at_time,integer,YES,NO,null,null
+public,journal_entries,7,key_themes,ARRAY,YES,NO,null,null
+public,mood_entries,1,id,bigint,NO,YES,null,null
+public,mood_entries,2,created_at,timestamp with time zone,NO,NO,null,null
+public,mood_entries,3,user_id,uuid,YES,NO,mood_entries,id
+public,mood_entries,4,mood_score,integer,NO,NO,null,null
+public,mood_entries,5,notes,text,YES,NO,null,null
+public,organization_credits,1,id,bigint,NO,YES,null,null
+public,organization_credits,2,organization_id,bigint,NO,NO,organization_credits,organization_id
+public,organization_credits,2,organization_id,bigint,NO,NO,organization_credits,id
+public,organization_credits,3,credits_remaining,integer,NO,NO,null,null
+public,organization_credits,4,last_updated_at,timestamp with time zone,YES,NO,null,null
+public,organizations,1,id,bigint,NO,YES,null,null
+public,organizations,2,created_at,timestamp with time zone,NO,NO,null,null
+public,organizations,3,name,text,NO,NO,null,null
+public,organizations,4,billing_info,jsonb,YES,NO,null,null
+public,organizations,5,notifications_weekly_reports,boolean,YES,NO,null,null
+public,organizations,6,notifications_monthly_analytics,boolean,YES,NO,null,null
+public,organizations,7,notifications_crisis_alerts,boolean,YES,NO,null,null
+public,organizations,8,notifications_usage_updates,boolean,YES,NO,null,null
+public,organizations,9,industry,text,YES,NO,null,null
+public,organizations,10,contact_email,text,YES,NO,null,null
+public,organizations,11,contact_phone,text,YES,NO,null,null
+public,organizations,12,website,text,YES,NO,null,null
+public,organizations,13,token,text,YES,NO,null,null
+public,organizations,14,employee_count,integer,YES,NO,null,null
+public,organizations,15,plan,text,YES,NO,null,null
+public,organizations,16,subscription_plan,text,YES,NO,null,null
+public,organizations,17,subscription_status,text,YES,NO,null,null
+public,organizations,18,stripe_customer_id,text,YES,NO,null,null
+public,profiles,1,id,uuid,NO,YES,null,null
+public,profiles,2,created_at,timestamp with time zone,NO,NO,null,null
+public,profiles,3,role,USER-DEFINED,NO,NO,null,null
+public,profiles,4,full_name,text,YES,NO,null,null
+public,profiles,5,avatar_url,text,YES,NO,null,null
+public,profiles,6,organization_id,bigint,YES,NO,profiles,id
+public,profiles,6,organization_id,bigint,YES,NO,profiles,id
+public,profiles,6,organization_id,bigint,YES,NO,profiles,id
+public,profiles,6,organization_id,bigint,YES,NO,profiles,id
+public,profiles,6,organization_id,bigint,YES,NO,profiles,id
+public,profiles,7,counselor_id,bigint,YES,NO,null,null
+public,profiles,8,is_flagged_for_crisis,boolean,YES,NO,null,null
+public,wellness_resources,1,id,bigint,NO,YES,null,null
+public,wellness_resources,2,created_at,timestamp with time zone,YES,NO,null,null
+public,wellness_resources,3,title,text,NO,NO,null,null
+public,wellness_resources,4,description,text,YES,NO,null,null
+public,wellness_resources,5,type,text,YES,NO,null,null
+public,wellness_resources,6,duration,integer,YES,NO,null,null
+public,wellness_resources,7,difficulty,text,YES,NO,null,null
+public,wellness_resources,8,category,text,YES,NO,null,null
+public,wellness_resources,9,content,jsonb,YES,NO,null,null
+public,wellness_resources,10,tags,ARRAY,YES,NO,null,null
+public,wellness_resources,11,image_url,text,YES,NO,null,null
+public,wellness_resources,12,is_popular,boolean,YES,NO,null,null
+realtime,messages,3,topic,text,NO,NO,null,null
+realtime,messages,4,extension,text,NO,NO,null,null
+realtime,messages,5,payload,jsonb,YES,NO,null,null
+realtime,messages,6,event,text,YES,NO,null,null
+realtime,messages,7,private,boolean,YES,NO,null,null
+realtime,messages,8,updated_at,timestamp without time zone,NO,NO,null,null
+realtime,messages,9,inserted_at,timestamp without time zone,NO,YES,null,null
+realtime,messages,10,id,uuid,NO,YES,null,null
+realtime,schema_migrations,1,version,bigint,NO,YES,null,null
+realtime,schema_migrations,2,inserted_at,timestamp without time zone,YES,NO,null,null
+realtime,subscription,1,id,bigint,NO,YES,null,null
+realtime,subscription,2,subscription_id,uuid,NO,NO,null,null
+realtime,subscription,4,entity,regclass,NO,NO,null,null
+realtime,subscription,5,filters,ARRAY,NO,NO,null,null
+realtime,subscription,7,claims,jsonb,NO,NO,null,null
+realtime,subscription,8,claims_role,regrole,NO,NO,null,null
+realtime,subscription,9,created_at,timestamp without time zone,NO,NO,null,null
+storage,buckets,1,id,text,NO,YES,null,null
+storage,buckets,2,name,text,NO,NO,null,null
+storage,buckets,3,owner,uuid,YES,NO,null,null
+storage,buckets,4,created_at,timestamp with time zone,YES,NO,null,null
+storage,buckets,5,updated_at,timestamp with time zone,YES,NO,null,null
+storage,buckets,6,public,boolean,YES,NO,null,null
+storage,buckets,7,avif_autodetection,boolean,YES,NO,null,null
+storage,buckets,8,file_size_limit,bigint,YES,NO,null,null
+storage,buckets,9,allowed_mime_types,ARRAY,YES,NO,null,null
+storage,buckets,10,owner_id,text,YES,NO,null,null
+storage,migrations,1,id,integer,NO,NO,null,null
+storage,migrations,2,name,character varying,NO,NO,null,null
+storage,migrations,3,hash,character varying,NO,NO,null,null
+storage,migrations,4,executed_at,timestamp without time zone,YES,NO,null,null
+storage,objects,1,id,uuid,NO,YES,null,null
+storage,objects,2,bucket_id,text,YES,NO,null,null
+storage,objects,3,name,text,YES,NO,null,null
+storage,objects,4,owner,uuid,YES,NO,null,null
+storage,objects,5,created_at,timestamp with time zone,YES,NO,null,null
+storage,objects,6,updated_at,timestamp with time zone,YES,NO,null,null
+storage,objects,7,last_accessed_at,timestamp with time zone,YES,NO,null,null
+storage,objects,8,metadata,jsonb,YES,NO,null,null
+storage,objects,9,path_tokens,ARRAY,YES,NO,null,null
+storage,objects,10,version,text,YES,NO,null,null
+storage,objects,11,owner_id,text,YES,NO,null,null
+storage,objects,12,user_metadata,jsonb,YES,NO,null,null
+storage,s3_multipart_uploads,1,id,text,NO,YES,null,null
+storage,s3_multipart_uploads,2,in_progress_size,bigint,NO,NO,null,null
+storage,s3_multipart_uploads,3,upload_signature,text,NO,NO,null,null
+storage,s3_multipart_uploads,4,bucket_id,text,NO,NO,null,null
+storage,s3_multipart_uploads,5,key,text,NO,NO,null,null
+storage,s3_multipart_uploads,6,version,text,NO,NO,null,null
+storage,s3_multipart_uploads,7,owner_id,text,YES,NO,null,null
+storage,s3_multipart_uploads,8,created_at,timestamp with time zone,NO,NO,null,null
+storage,s3_multipart_uploads,9,user_metadata,jsonb,YES,NO,null,null
+storage,s3_multipart_uploads_parts,1,id,uuid,NO,YES,null,null
+storage,s3_multipart_uploads_parts,2,upload_id,text,NO,NO,null,null
+storage,s3_multipart_uploads_parts,3,size,bigint,NO,NO,null,null
+storage,s3_multipart_uploads_parts,4,part_number,integer,NO,NO,null,null
+storage,s3_multipart_uploads_parts,5,bucket_id,text,NO,NO,null,null
+storage,s3_multipart_uploads_parts,6,key,text,NO,NO,null,null
+storage,s3_multipart_uploads_parts,7,etag,text,NO,NO,null,null
+storage,s3_multipart_uploads_parts,8,owner_id,text,YES,NO,null,null
+storage,s3_multipart_uploads_parts,9,version,text,NO,NO,null,null
+storage,s3_multipart_uploads_parts,10,created_at,timestamp with time zone,NO,NO,null,null
+supabase_migrations,schema_migrations,1,version,text,NO,YES,null,null
+supabase_migrations,schema_migrations,2,statements,ARRAY,YES,NO,null,null
+supabase_migrations,schema_migrations,3,name,text,YES,NO,null,null
+vault,decrypted_secrets,1,id,uuid,YES,NO,null,null
+vault,decrypted_secrets,2,name,text,YES,NO,null,null
+vault,decrypted_secrets,3,description,text,YES,NO,null,null
+vault,decrypted_secrets,4,secret,text,YES,NO,null,null
+vault,decrypted_secrets,5,decrypted_secret,text,YES,NO,null,null
+vault,decrypted_secrets,6,key_id,uuid,YES,NO,null,null
+vault,decrypted_secrets,7,nonce,bytea,YES,NO,null,null
+vault,decrypted_secrets,8,created_at,timestamp with time zone,YES,NO,null,null
+vault,decrypted_secrets,9,updated_at,timestamp with time zone,YES,NO,null,null
+vault,secrets,1,id,uuid,NO,YES,null,null
+vault,secrets,2,name,text,YES,NO,null,null
+vault,secrets,3,description,text,NO,NO,null,null
+vault,secrets,4,secret,text,NO,NO,null,null
+vault,secrets,5,key_id,uuid,YES,NO,null,null
+vault,secrets,6,nonce,bytea,YES,NO,null,null
+vault,secrets,7,created_at,timestamp with time zone,NO,NO,null,null
+vault,secrets,8,updated_at,timestamp with time zone,NO,NO,null,null

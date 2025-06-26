@@ -137,3 +137,13 @@ export interface WellnessInsights {
   sessions_completed: number;
   streak: number;
 }
+
+export interface JournalEntry {
+  id: string;
+  user_id: string;
+  title: string;
+  summary: string;
+  key_themes: string[];
+  mood_score_at_time: number | null;
+  created_at: string;
+}
